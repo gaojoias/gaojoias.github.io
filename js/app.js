@@ -858,8 +858,8 @@ function buildOrcamentoDoc(orcamento) {
         <p>${orcamento.obsPublic || '-'}</p>
       </section>
       <footer class="doc-footer">
-        <span>Documento nao fiscal • GAO Joias</span>
-      </footer>
+        <span>Documento nao fiscal • GAO Joias</span><br>
+      </footer><br>
     </div>
   `;
 }
