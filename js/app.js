@@ -1,6 +1,6 @@
-﻿const ADMIN_PASSWORD = 'G@04dm4645#';
+const ADMIN_PASSWORD = 'G@04dm4645#';
 const OP_PASSWORD = 'GAO#123';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwKH3BOfUjYNsqT_wrRORYk2vYDeB2iy61_f5eOl_7HO3zJNr3TXUpHdPJdsHQueHMa/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw2EDkvCYk4srFKgN90tdmS-mLRmSzDkNk0el1cTY5GOtdjNqvBqeMSxuNWdb1zCZzn/exec';
 
 const STORAGE_KEYS = {
   scriptUrl: 'gao_script_url',
@@ -493,14 +493,14 @@ function renderOrcamentos() {
         : '';
       return `
         <tr>
-          <td>${orcamento.numero || '-'}</td>
-          <td>${formatDateShort(orcamento.dataHora)}</td>
-          <td>${orcamento.cliente || '-'}</td>
-          <td>${orcamento.produtoServico || '-'}</td>
-          <td>${formatCurrency(valor)}</td>
-          <td>${formatCurrency(orcamento.lucro || 0)}</td>
-          <td><span class="badge ${statusClass}">${orcamento.status || 'Em negociacao'}</span></td>
-          <td>
+          <td data-label="Numero">${orcamento.numero || '-'}</td>
+          <td data-label="Data">${formatDateShort(orcamento.dataHora)}</td>
+          <td data-label="Cliente">${orcamento.cliente || '-'}</td>
+          <td data-label="Produto/Servico">${orcamento.produtoServico || '-'}</td>
+          <td data-label="Valor">${formatCurrency(valor)}</td>
+          <td data-label="Lucro">${formatCurrency(orcamento.lucro || 0)}</td>
+          <td data-label="Status"><span class="badge ${statusClass}">${orcamento.status || 'Em negociacao'}</span></td>
+          <td data-label="Acoes">
             <div class="actions">
               <button class="btn btn-ghost action-btn" data-action="view" data-id="${orcamento.rowIndex}" title="Visualizar"><i class="fa-solid fa-eye"></i></button>
               ${editBtn}
@@ -530,14 +530,14 @@ function renderVendas() {
     .map((venda) => {
       return `
         <tr>
-          <td>${venda.numero || '-'}</td>
-          <td>${formatDateShort(venda.dataHora)}</td>
-          <td>${venda.cliente || '-'}</td>
-          <td>${venda.produtoServico || '-'}</td>
-          <td>${formatCurrency(venda.valor || 0)}</td>
-          <td>${formatCurrency(venda.lucro || 0)}</td>
-          <td>${venda.pgto || '-'}</td>
-          <td>
+          <td data-label="Numero">${venda.numero || '-'}</td>
+          <td data-label="Data">${formatDateShort(venda.dataHora)}</td>
+          <td data-label="Cliente">${venda.cliente || '-'}</td>
+          <td data-label="Produto/Servico">${venda.produtoServico || '-'}</td>
+          <td data-label="Valor">${formatCurrency(venda.valor || 0)}</td>
+          <td data-label="Lucro">${formatCurrency(venda.lucro || 0)}</td>
+          <td data-label="Pagamento">${venda.pgto || '-'}</td>
+          <td data-label="Acoes">
             <div class="actions">
               <button class="btn btn-ghost action-btn" data-action="nota" data-id="${venda.rowIndex}" title="Ver nota"><i class="fa-solid fa-receipt"></i></button>
               <button class="btn btn-ghost action-btn" data-action="edit-venda" data-id="${venda.rowIndex}" title="Editar pagamento"><i class="fa-solid fa-pen"></i></button>
@@ -1415,8 +1415,3 @@ function init() {
 }
 
 init();
-
-
-
-
-
