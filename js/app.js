@@ -133,6 +133,62 @@ function parseNumber(value) {
   return Number.isNaN(num) ? 0 : num;
 }
 
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function formatPhoneBR(value) {
+  const digits = onlyDigits(value).slice(0, 11);
+  if (digits.length === 0) return '';
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (rest.length <= 8) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest.slice(0, 1)} ${rest.slice(1, 5)}-${rest.slice(5, 9)}`;
+}
+
+function formatCpfCnpj(value) {
+  const digits = onlyDigits(value).slice(0, 14);
+  if (digits.length <= 11) {
+    const p1 = digits.slice(0, 3);
+    const p2 = digits.slice(3, 6);
+    const p3 = digits.slice(6, 9);
+    const p4 = digits.slice(9, 11);
+    let out = p1;
+    if (p2) out += `.${p2}`;
+    if (p3) out += `.${p3}`;
+    if (p4) out += `-${p4}`;
+    return out;
+  }
+  const c1 = digits.slice(0, 2);
+  const c2 = digits.slice(2, 5);
+  const c3 = digits.slice(5, 8);
+  const c4 = digits.slice(8, 12);
+  const c5 = digits.slice(12, 14);
+  let out = c1;
+  if (c2) out += `.${c2}`;
+  if (c3) out += `.${c3}`;
+  if (c4) out += `/${c4}`;
+  if (c5) out += `-${c5}`;
+  return out;
+}
+
+function applyInputMasks(scope) {
+  const telefoneInput = scope.querySelector('input[name="telefone"]');
+  if (telefoneInput) {
+    telefoneInput.addEventListener('input', (event) => {
+      event.target.value = formatPhoneBR(event.target.value);
+    });
+  }
+
+  const docInput = scope.querySelector('input[name="cpfCNPJ"]');
+  if (docInput) {
+    docInput.addEventListener('input', (event) => {
+      event.target.value = formatCpfCnpj(event.target.value);
+    });
+  }
+}
+
 function calcOrcamentoValues(payload) {
   const custoMaterial = parseNumber(payload.custoMaterial);
   const custoOutros = parseNumber(payload.custoOutros);
@@ -722,6 +778,7 @@ function getClienteTelefone(nome) {
 function openDrawer(contentHtml) {
   dom.drawerBody.innerHTML = contentHtml;
   dom.drawer.classList.remove('hidden');
+  applyInputMasks(dom.drawerBody);
 }
 
 function closeDrawer() {
@@ -1356,6 +1413,8 @@ function setupEvents() {
     if (event.target === dom.modal) closeModal();
   });
   dom.drawerClose.addEventListener('click', closeDrawer);
+
+  applyInputMasks(dom.clienteForm);
 
   dom.clienteForm.addEventListener('submit', handleClienteSubmit);
   dom.orcamentoForm.addEventListener('submit', handleOrcamentoSubmit);
