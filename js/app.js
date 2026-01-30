@@ -39,6 +39,7 @@ const dom = {
   themeToggle: document.getElementById('theme-toggle'),
   sessionChip: document.getElementById('session-chip'),
   toast: document.getElementById('toast'),
+  loading: document.getElementById('loading'),
   drawer: document.getElementById('drawer'),
   drawerBody: document.getElementById('drawer-body'),
   drawerClose: document.getElementById('drawer-close'),
@@ -96,6 +97,11 @@ function showToast(message, type = 'info') {
   dom.toast.classList.add('show');
   dom.toast.dataset.type = type;
   setTimeout(() => dom.toast.classList.remove('show'), 3000);
+}
+
+function setLoading(active) {
+  if (!dom.loading) return;
+  dom.loading.classList.toggle('hidden', !active);
 }
 
 function formatCurrency(value) {
@@ -340,12 +346,15 @@ async function loadAllData() {
     showToast('Configure a URL do Apps Script para iniciar.');
     return;
   }
+  setLoading(true);
   try {
     const data = await apiRequest('listAll');
     state.data = data;
     renderAll();
   } catch (error) {
     showToast(error.message || 'Falha ao carregar dados', 'error');
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -1474,4 +1483,3 @@ function init() {
 }
 
 init();
-
