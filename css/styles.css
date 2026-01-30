@@ -107,6 +107,43 @@ body {
   transform: translateY(0);
 }
 
+.loading {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 8, 0.65);
+  display: grid;
+  place-items: center;
+  z-index: 220;
+}
+
+.loading-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(23, 30, 26, 0.95);
+  border: 1px solid rgba(217, 180, 90, 0.25);
+  padding: 18px 22px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.loading-card small {
+  color: var(--muted);
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid rgba(217, 180, 90, 0.2);
+  border-top-color: var(--gold);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .login {
   position: relative;
   z-index: 2;
@@ -929,6 +966,30 @@ select:focus {
   overflow-y: auto;
 }
 
+[data-theme='light'] .modal-content {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text);
+}
+
+[data-theme='light'] .modal-actions .btn-ghost {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text);
+}
+
+[data-theme='light'] .modal-actions .btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='light'] .loading {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme='light'] .loading-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
 @media (max-width: 980px) {
   .app {
     grid-template-columns: 1fr;
@@ -965,6 +1026,27 @@ select:focus {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panel-actions {
+    width: 100%;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid .full {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 720px) {
@@ -978,6 +1060,21 @@ select:focus {
 
   .sidebar {
     inset: 0 15% 0 0;
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .topbar-actions .btn,
+  .topbar-actions .chip {
+    width: 100%;
+    justify-content: center;
   }
 }
 
