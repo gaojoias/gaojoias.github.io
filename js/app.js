@@ -1,6 +1,6 @@
 const ADMIN_PASSWORD = 'G@04dm4645#';
 const OP_PASSWORD = 'GAO#123';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyS1DTeTQBI_wcsuxT2souKQrjTlzLLy6yH4TXHH0_vFMaY_2wZiAnLpf5xZDWUfLNe/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWSKsZahP7QC088inWNwWrWBqh16Kda4-uGEgBrEHKYoFBy36Va6CkchXppf2bdi_D/exec';
 
 const STORAGE_KEYS = {
   scriptUrl: 'gao_script_url',
