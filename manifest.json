@@ -1,0 +1,13 @@
+﻿{
+  "name": "GAO Joias - Sistema Administrativo",
+  "short_name": "GAO Joias",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f1411",
+  "theme_color": "#0f1411",
+  "description": "Sistema administrativo da GAO Joias",
+  "icons": [
+    { "src": "img/favicon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/favicon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

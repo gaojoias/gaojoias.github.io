@@ -1,0 +1,394 @@
+﻿<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GAO Joias | Sistema Administrativo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="icon" type="image/png" href="img/favicon.png" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f1411" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="bg-orb bg-orb--one"></div>
+  <div class="bg-orb bg-orb--two"></div>
+  <div class="bg-grid"></div>
+
+  <div id="toast" class="toast"></div>
+
+  <section id="login-screen" class="login">
+    <div class="login-card">
+      <div class="brand">
+        <img src="img/logo_white.png" alt="GAO Joias" class="logo-swap" data-logo-dark="img/logo_white.png" data-logo-light="img/logo_black.png" />
+        <div>
+          <h1>GAO Joias</h1>
+          <p>Sistema Administrativo</p>
+        </div>
+      </div>
+      <form id="login-form" class="login-form">
+        <label>
+          Usuario
+          <input type="text" name="user" required placeholder="Ex: Mariana" />
+        </label>
+        <label>
+          Senha
+          <input type="password" name="senha" required placeholder="Digite sua senha" />
+        </label>
+        <button type="submit" class="btn btn-primary">
+          <span>Entrar</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </form>
+      <div class="login-footer">
+        <span>Monitoramento, orcamentos e vendas em um so lugar.</span>
+      </div>
+    </div>
+  </section>
+
+  <div id="app-shell" class="app hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="img/logo_white.png" alt="GAO Joias" class="logo-swap" data-logo-dark="img/logo_white.png" data-logo-light="img/logo_black.png" />
+        <div>
+          <strong>GAO Joias</strong>
+        </div>
+        
+      </div>
+
+      <nav class="nav">
+        <button class="nav-link active" data-view="dashboard" data-admin><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></button>
+        <button class="nav-link" data-view="clientes"><i class="fa-solid fa-user-group"></i><span>Clientes</span></button>
+        <button class="nav-link" data-view="orcamentos"><i class="fa-solid fa-file-invoice"></i><span>Orcamentos</span></button>
+        <button class="nav-link" data-view="vendas"><i class="fa-solid fa-coins"></i><span>Vendas</span></button>
+        <button class="nav-link" data-view="logs" data-admin><i class="fa-solid fa-shield-halved"></i><span>Logs</span></button>
+        <button class="nav-link" data-view="config" data-admin><i class="fa-solid fa-gear"></i><span>Configuracoes</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="profile">
+          <div class="avatar" id="profile-avatar">GA</div>
+          <div>
+            <strong id="profile-name">Usuario</strong>
+            <small id="profile-role">Perfil</small>
+          </div>
+        </div>
+        <button id="logout-btn" class="btn btn-ghost">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i><span>Sair</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <button id="menu-btn" class="icon-btn"><i class="fa-solid fa-bars"></i></button>
+        <div class="topbar-title">
+          <h2 id="view-title">Dashboard</h2>
+          <p id="view-subtitle">Visao geral do negocio em tempo real</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="theme-toggle" class="btn btn-ghost" title="Alternar tema">
+            <i class="fa-solid fa-moon"></i><span>Modo</span>
+          </button>
+          <div class="chip" id="session-chip">Sessao</div>
+          <button id="refresh-btn" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i><span>Atualizar</span></button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active" data-admin>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <p>Orcamentos ativos</p>
+            <h3 id="stat-orcamentos">0</h3>
+            <span id="stat-conversao">0% de conversao</span>
+          </div>
+          <div class="stat-card">
+            <p>Vendas confirmadas</p>
+            <h3 id="stat-vendas">0</h3>
+            <span id="stat-receita">R$ 0,00</span>
+          </div>
+          <div class="stat-card">
+            <p>Lucro estimado</p>
+            <h3 id="stat-lucro">R$ 0,00</h3>
+            <span id="stat-margem">Margem 0%</span>
+          </div>
+          <div class="stat-card highlight">
+            <p>Clientes ativos</p>
+            <h3 id="stat-clientes">0</h3>
+            <span id="stat-ticket">Ticket medio R$ 0,00</span>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <h4>Status dos orcamentos</h4>
+              <span class="muted">Ultimos 90 dias</span>
+            </div>
+            <canvas id="chart-orcamentos"></canvas>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h4>Receita x Lucro</h4>
+              <span class="muted">Acumulado mensal</span>
+            </div>
+            <canvas id="chart-receita"></canvas>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <h4>Vendas por pagamento</h4>
+              <span class="muted">Distribuicao atual</span>
+            </div>
+            <canvas id="chart-pgto"></canvas>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h4>Top clientes</h4>
+              <span class="muted">Volume de vendas</span>
+            </div>
+            <div id="top-clientes" class="list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="clientes" class="view">
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Novo cliente</h4>
+            <span class="muted">Cadastro rapido para novos contatos</span>
+          </div>
+          <form id="cliente-form" class="form-grid">
+            <label>Nome<input type="text" name="nome" required /></label>
+            <label>Telefone<input type="text" name="telefone" required /></label>
+            <label>Email<input type="email" name="email" /></label>
+            <label>Empresa<input type="text" name="empresa" /></label>
+            <label>CPF/CNPJ<input type="text" name="cpfCNPJ" /></label>
+            <label class="full">Observacoes<input type="text" name="obs" /></label>
+            <button class="btn btn-primary" type="submit">Salvar cliente</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Clientes cadastrados</h4>
+            <input id="cliente-search" class="input" type="search" placeholder="Buscar por nome ou telefone" />
+          </div>
+          <div class="table-wrapper">
+            <table class="table" id="cliente-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Nome</th>
+                  <th>Telefone</th>
+                  <th>Email</th>
+                  <th>Empresa</th>
+                  <th>CPF/CNPJ</th>
+                  <th>Obs</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="orcamentos" class="view">
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Novo orcamento</h4>
+            <span class="muted">Monte propostas e calcule margens</span>
+          </div>
+          <form id="orcamento-form" class="form-grid">
+            <label>Cliente
+              <select name="cliente" id="orcamento-cliente" required></select>
+            </label>
+            <label>Produto/Servico<input type="text" name="produtoServico" required /></label>
+            <label>Descricao<input type="text" name="descricao" /></label>
+            <label>Validade<input type="date" name="validade" /></label>
+            <label>Observacao publica<input type="text" name="obsPublic" /></label>
+            <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
+            <label>Custo material<input type="number" step="0.01" name="custoMaterial" data-admin /></label>
+            <label>Custo outros<input type="number" step="0.01" name="custoOutros" data-admin /></label>
+            <label>Valor cobrado<input type="number" step="0.01" name="valorCobrado" required /></label>
+            <label>Status
+              <select name="status">
+                <option value="Em negociacao">Em negociacao</option>
+                <option value="Enviado">Enviado</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Perdido">Perdido</option>
+              </select>
+            </label>
+            <button class="btn btn-primary" type="submit">Salvar orcamento</button>
+          </form>
+        </div>
+
+        <div class="panel">
+        <div class="panel-header">
+          <h4>Orcamentos</h4>
+          <div class="panel-actions">
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="orcamento-search" class="input" type="search" placeholder="Buscar por cliente ou status" />
+              </div>
+          </div>
+        </div>
+          <div class="table-wrapper">
+            <table class="table" id="orcamento-table">
+              <thead>
+                <tr>
+                  <th>Numero</th>
+                  <th>Data</th>
+                  <th>Cliente</th>
+                  <th>Produto/Servico</th>
+                  <th>Valor</th>
+                  <th>Lucro</th>
+                  <th>Status</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="vendas" class="view">
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Nova venda</h4>
+            <span class="muted">Registre vendas diretas ou de orcamentos</span>
+          </div>
+          <form id="venda-form" class="form-grid">
+            <label>Cliente
+              <select name="cliente" id="venda-cliente" required></select>
+            </label>
+            <label>Produto/Servico<input type="text" name="produtoServico" required /></label>
+            <label>Descricao<input type="text" name="descricao" /></label>
+            <label>Valor<input type="number" step="0.01" name="valor" required /></label>
+            <label>Custo total<input type="number" step="0.01" name="totalCustos" /></label>
+            <label>Pagamento
+              <select name="pgto" required>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Pix">Pix</option>
+                <option value="Credito">Credito</option>
+                <option value="Debito">Debito</option>
+                <option value="Pendente">Pendente</option>
+              </select>
+            </label>
+            <label class="full">Observacoes<input type="text" name="obs" /></label>
+            <button class="btn btn-primary" type="submit">Salvar venda</button>
+          </form>
+        </div>
+
+        <div class="panel">
+        <div class="panel-header">
+          <h4>Vendas</h4>
+          <div class="search-input">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="venda-search" class="input" type="search" placeholder="Buscar por cliente ou pagamento" />
+          </div>
+        </div>
+          <div class="table-wrapper">
+            <table class="table" id="venda-table">
+              <thead>
+                <tr>
+                  <th>Numero</th>
+                  <th>Data</th>
+                  <th>Cliente</th>
+                  <th>Produto/Servico</th>
+                  <th>Valor</th>
+                  <th>Lucro</th>
+                  <th>Pagamento</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="logs" class="view" data-admin>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Logs de acesso</h4>
+            <span class="muted">Historico de login</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="table" id="log-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Perfil</th>
+                  <th>Data</th>
+                  <th>Sistema</th>
+                  <th>Navegador</th>
+                  <th>IP</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="config" class="view" data-admin>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Configuracoes</h4>
+            <span class="muted">Conexoes e parametros do sistema</span>
+          </div>
+          <div class="config-grid">
+            <div class="config-card">
+              <h5>Apps Script</h5>
+              <p>Informe a URL do Web App para salvar dados na planilha.</p>
+              <input id="script-url" class="input" type="text" placeholder="Cole aqui a URL /exec" />
+              <button id="save-script-url" class="btn btn-primary">Salvar URL</button>
+            </div>
+            <div class="config-card">
+              <h5>Documentos e notas</h5>
+              <p>Use as opcoes abaixo para configurar impressao e PDFs.</p>
+              <div class="config-actions">
+                <button id="test-pdf" class="btn btn-ghost">Gerar PDF teste</button>
+                <button id="test-print" class="btn btn-ghost">Impressao normal</button>
+                <button id="test-thermal" class="btn btn-ghost">Impressao Bematech HS</button>
+              </div>
+            </div>
+            <div class="config-card">
+              <h5>Relatorios</h5>
+              <p>Baixe relatorios rapidos para auditoria.</p>
+              <div class="config-actions">
+                <button id="export-clientes" class="btn btn-ghost">Exportar clientes</button>
+                <button id="export-vendas" class="btn btn-ghost">Exportar vendas</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="drawer" class="drawer hidden">
+    <div class="drawer-content">
+      <button id="drawer-close" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+      <div id="drawer-body"></div>
+    </div>
+  </div>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-content" id="modal-content"></div>
+  </div>
+
+  <noscript>Ative o JavaScript para usar o sistema.</noscript>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
