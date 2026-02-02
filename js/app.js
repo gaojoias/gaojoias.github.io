@@ -511,13 +511,13 @@ function renderClientes() {
   dom.clienteTable.innerHTML = rows
     .map((cliente) => `
       <tr>
-        <td>${formatDateShort(cliente.dataHora)}</td>
-        <td>${cliente.nome || '-'}</td>
-        <td>${cliente.telefone || '-'}</td>
-        <td>${cliente.email || '-'}</td>
-        <td>${cliente.empresa || '-'}</td>
-        <td>${cliente.cpfCNPJ || '-'}</td>
-        <td>${cliente.obs || '-'}</td>
+        <td data-label="Data">${formatDateShort(cliente.dataHora)}</td>
+        <td data-label="Nome">${cliente.nome || '-'}</td>
+        <td data-label="Telefone">${cliente.telefone || '-'}</td>
+        <td data-label="Email">${cliente.email || '-'}</td>
+        <td data-label="Empresa">${cliente.empresa || '-'}</td>
+        <td data-label="CPF/CNPJ">${cliente.cpfCNPJ || '-'}</td>
+        <td data-label="Obs">${cliente.obs || '-'}</td>
       </tr>
     `)
     .join('');
