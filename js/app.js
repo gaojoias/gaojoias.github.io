@@ -1,6 +1,6 @@
 const ADMIN_PASSWORD = 'G@04dm4645#';
 const OP_PASSWORD = 'GAO#123';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWSKsZahP7QC088inWNwWrWBqh16Kda4-uGEgBrEHKYoFBy36Va6CkchXppf2bdi_D/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxUaIGFtvyBn2YNG4YScFtMLHZG4kOM210kh1Br8xgWRjGAUeLsmV7dN9az9-_kAqdb/exec';
 
 const STORAGE_KEYS = {
   scriptUrl: 'gao_script_url',
@@ -16,9 +16,11 @@ const state = {
     clientes: [],
     orcamentos: [],
     vendas: [],
-    logs: []
+    logs: [],
+    financeiro: []
   },
-  charts: {}
+  charts: {},
+  dashboardPeriod: 'today'
 };
 
 const dom = {
@@ -54,6 +56,11 @@ const dom = {
   vendaForm: document.getElementById('venda-form'),
   vendaTable: document.getElementById('venda-table').querySelector('tbody'),
   vendaSearch: document.getElementById('venda-search'),
+  financeiroForm: document.getElementById('financeiro-form'),
+  financeiroTable: document.getElementById('financeiro-table').querySelector('tbody'),
+  financeiroSearch: document.getElementById('financeiro-search'),
+  financeiroTipo: document.getElementById('financeiro-tipo'),
+  financeiroCategoria: document.getElementById('financeiro-categoria'),
   logTable: document.getElementById('log-table').querySelector('tbody'),
   orcamentoCliente: document.getElementById('orcamento-cliente'),
   vendaCliente: document.getElementById('venda-cliente'),
@@ -64,15 +71,34 @@ const dom = {
   testThermal: document.getElementById('test-thermal'),
   exportClientes: document.getElementById('export-clientes'),
   exportVendas: document.getElementById('export-vendas'),
-  statOrcamentos: document.getElementById('stat-orcamentos'),
-  statConversao: document.getElementById('stat-conversao'),
-  statVendas: document.getElementById('stat-vendas'),
-  statReceita: document.getElementById('stat-receita'),
-  statLucro: document.getElementById('stat-lucro'),
-  statMargem: document.getElementById('stat-margem'),
-  statClientes: document.getElementById('stat-clientes'),
-  statTicket: document.getElementById('stat-ticket'),
-  topClientes: document.getElementById('top-clientes')
+  exportFinanceiro: document.getElementById('export-financeiro'),
+  dashboardPeriod: document.getElementById('dashboard-period'),
+  dashboardPeriodLabel: document.getElementById('dashboard-period-label'),
+  dashEntradas: document.getElementById('dash-entradas'),
+  dashEntradasCompare: document.getElementById('dash-entradas-compare'),
+  dashSaidas: document.getElementById('dash-saidas'),
+  dashSaidasCompare: document.getElementById('dash-saidas-compare'),
+  dashSaldo: document.getElementById('dash-saldo'),
+  dashSaldoCompare: document.getElementById('dash-saldo-compare'),
+  dashDre: document.getElementById('dash-dre'),
+  dashDreCompare: document.getElementById('dash-dre-compare'),
+  dashOrcamentos: document.getElementById('dash-orcamentos'),
+  dashConversao: document.getElementById('dash-conversao'),
+  dashVendas: document.getElementById('dash-vendas'),
+  dashTicket: document.getElementById('dash-ticket'),
+  dashAportes: document.getElementById('dash-aportes'),
+  dashAportesCompare: document.getElementById('dash-aportes-compare'),
+  dashMargem: document.getElementById('dash-margem'),
+  dashClientes: document.getElementById('dash-clientes'),
+  drePeriodLabel: document.getElementById('dre-period-label'),
+  dreReceitaOp: document.getElementById('dre-receita-op'),
+  dreOutrasEntradas: document.getElementById('dre-outras-entradas'),
+  dreCustos: document.getElementById('dre-custos'),
+  dreDespesas: document.getElementById('dre-despesas'),
+  dreResultadoOp: document.getElementById('dre-resultado-op'),
+  dreResultadoLiquido: document.getElementById('dre-resultado-liquido'),
+  topClientes: document.getElementById('top-clientes'),
+  financeiroResumoList: document.getElementById('financeiro-resumo-list')
 };
 
 const subtitles = {
@@ -80,6 +106,7 @@ const subtitles = {
   clientes: 'Cadastro e gestao de relacionamento',
   orcamentos: 'Propostas, custos e margens',
   vendas: 'Controle financeiro e pagamentos',
+  financeiro: 'Fluxo de caixa, DRE e lancamentos manuais',
   logs: 'Auditoria de acessos do sistema',
   config: 'Conecte o Apps Script e exportacoes'
 };
@@ -264,6 +291,9 @@ function applyTheme(theme) {
     icon.className = mode === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
   }
   updateLogos(mode);
+  if (state.data && Array.isArray(state.data.vendas)) {
+    renderDashboard();
+  }
 }
 
 function loadTheme() {
@@ -349,7 +379,13 @@ async function loadAllData() {
   setLoading(true);
   try {
     const data = await apiRequest('listAll');
-    state.data = data;
+    state.data = {
+      clientes: data?.clientes || [],
+      orcamentos: data?.orcamentos || [],
+      vendas: data?.vendas || [],
+      logs: data?.logs || [],
+      financeiro: data?.financeiro || []
+    };
     renderAll();
   } catch (error) {
     showToast(error.message || 'Falha ao carregar dados', 'error');
@@ -493,6 +529,7 @@ function renderAll() {
   renderClientes();
   renderOrcamentos();
   renderVendas();
+  renderFinanceiro();
   renderLogs();
   renderDashboard();
   renderClienteOptions();
@@ -615,6 +652,50 @@ function renderVendas() {
     })
     .join('');
 }
+
+function renderFinanceiro() {
+  const search = dom.financeiroSearch?.value?.toLowerCase() || '';
+  const rows = [...(state.data.financeiro || [])]
+    .sort((a, b) => {
+      const da = new Date(a.dataHora || 0).getTime();
+      const db = new Date(b.dataHora || 0).getTime();
+      return db - da;
+    })
+    .filter((item) => {
+      if (!search) return true;
+      return (
+        String(item.numero || '').toLowerCase().includes(search) ||
+        String(item.tipo || '').toLowerCase().includes(search) ||
+        String(item.categoria || '').toLowerCase().includes(search) ||
+        String(item.descricao || '').toLowerCase().includes(search) ||
+        String(item.origem || '').toLowerCase().includes(search)
+      );
+    });
+
+  dom.financeiroTable.innerHTML = rows
+    .map((item) => {
+      const tipoClass = String(item.tipo || '').toLowerCase() === 'saida' ? 'danger' : 'success';
+      const canEdit = state.perfil === 'Administrador' && String(item.origem || '').toLowerCase() !== 'venda';
+      return `
+        <tr>
+          <td data-label="Numero">${item.numero || '-'}</td>
+          <td data-label="Data">${formatDateShort(item.dataHora)}</td>
+          <td data-label="Tipo"><span class="badge ${tipoClass}">${item.tipo || '-'}</span></td>
+          <td data-label="Categoria">${item.categoria || '-'}</td>
+          <td data-label="Descricao">${item.descricao || '-'}</td>
+          <td data-label="Valor">${formatCurrency(item.valor || 0)}</td>
+          <td data-label="Origem">${item.origem || '-'}</td>
+          <td data-label="Acoes">
+            <div class="actions">
+              ${canEdit ? `<button class="btn btn-ghost action-btn" data-action="edit-financeiro" data-id="${item.rowIndex}" title="Editar"><i class="fa-solid fa-pen"></i></button>` : '<span class="muted">-</span>'}
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+}
+
 function renderLogs() {
   dom.logTable.innerHTML = state.data.logs
     .map((log) => `
@@ -631,86 +712,197 @@ function renderLogs() {
 }
 
 function renderDashboard() {
-  const orcamentos = state.data.orcamentos;
-  const vendas = state.data.vendas;
+  const period = state.dashboardPeriod || 'today';
+  if (dom.dashboardPeriod) {
+    qsa('.period-btn', dom.dashboardPeriod).forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.period === period);
+    });
+  }
+  const range = getPeriodRange(period);
+  const previousRange = getPreviousRange(range);
 
-  const totalOrc = orcamentos.length;
-  const totalVendas = vendas.length;
-  const receita = vendas.reduce((sum, venda) => sum + parseNumber(venda.valor), 0);
-  const lucro = vendas.reduce((sum, venda) => sum + parseNumber(venda.lucro), 0);
-  const conversao = totalOrc ? (totalVendas / totalOrc) * 100 : 0;
-  const margem = receita ? (lucro / receita) * 100 : 0;
-  const ticket = totalVendas ? receita / totalVendas : 0;
+  const vendasAtual = filterByRange(state.data.vendas, range);
+  const vendasAnterior = filterByRange(state.data.vendas, previousRange);
+  const orcamentosAtual = filterByRange(state.data.orcamentos, range);
+  const orcamentosAnterior = filterByRange(state.data.orcamentos, previousRange);
+  const financeiroAtual = filterByRange(state.data.financeiro, range);
+  const financeiroAnterior = filterByRange(state.data.financeiro, previousRange);
 
-  dom.statOrcamentos.textContent = totalOrc;
-  dom.statVendas.textContent = totalVendas;
-  dom.statClientes.textContent = state.data.clientes.length;
-  dom.statReceita.textContent = formatCurrency(receita);
-  dom.statLucro.textContent = formatCurrency(lucro);
-  dom.statConversao.textContent = `${conversao.toFixed(1)}% de conversao`;
-  dom.statMargem.textContent = `Margem ${margem.toFixed(1)}%`;
-  dom.statTicket.textContent = `Ticket medio ${formatCurrency(ticket)}`;
+  const entradasAtual = sumFinance(financeiroAtual, 'Entrada');
+  const entradasAnterior = sumFinance(financeiroAnterior, 'Entrada');
+  const saidasAtual = sumFinance(financeiroAtual, 'Saida');
+  const saidasAnterior = sumFinance(financeiroAnterior, 'Saida');
+  const saldoAtual = entradasAtual - saidasAtual;
+  const saldoAnterior = entradasAnterior - saidasAnterior;
 
-  renderCharts();
-  renderTopClientes();
+  const outrasEntradasAtual = sumFinance(financeiroAtual, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
+  const outrasEntradasAnterior = sumFinance(financeiroAnterior, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
+  const despesasAtual = saidasAtual;
+  const despesasAnterior = saidasAnterior;
+
+  const receitaOperacionalAtual = vendasAtual.reduce((sum, item) => sum + parseNumber(item.valor), 0);
+  const receitaOperacionalAnterior = vendasAnterior.reduce((sum, item) => sum + parseNumber(item.valor), 0);
+  const custosAtual = vendasAtual.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
+  const custosAnterior = vendasAnterior.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
+  const lucroAtual = vendasAtual.reduce((sum, item) => sum + parseNumber(item.lucro), 0);
+
+  const resultadoOperacionalAtual = receitaOperacionalAtual - custosAtual - despesasAtual;
+  const resultadoOperacionalAnterior = receitaOperacionalAnterior - custosAnterior - despesasAnterior;
+  const resultadoLiquidoAtual = resultadoOperacionalAtual + outrasEntradasAtual;
+  const resultadoLiquidoAnterior = resultadoOperacionalAnterior + outrasEntradasAnterior;
+
+  const totalOrcamentosAtual = orcamentosAtual.length;
+  const totalOrcamentosAnterior = orcamentosAnterior.length;
+  const totalVendasAtual = vendasAtual.length;
+  const totalVendasAnterior = vendasAnterior.length;
+  const conversaoAtual = totalOrcamentosAtual ? (totalVendasAtual / totalOrcamentosAtual) * 100 : 0;
+  const conversaoAnterior = totalOrcamentosAnterior ? (totalVendasAnterior / totalOrcamentosAnterior) * 100 : 0;
+  const ticketAtual = totalVendasAtual ? receitaOperacionalAtual / totalVendasAtual : 0;
+  const margemAtual = receitaOperacionalAtual ? (lucroAtual / receitaOperacionalAtual) * 100 : 0;
+  const clientesAtivos = new Set(
+    vendasAtual.map((item) => item.cliente).concat(orcamentosAtual.map((item) => item.cliente)).filter(Boolean)
+  ).size;
+
+  dom.dashEntradas.textContent = formatCurrency(entradasAtual);
+  dom.dashSaidas.textContent = formatCurrency(saidasAtual);
+  dom.dashSaldo.textContent = formatCurrency(saldoAtual);
+  dom.dashDre.textContent = formatCurrency(resultadoLiquidoAtual);
+  dom.dashOrcamentos.textContent = totalOrcamentosAtual;
+  dom.dashVendas.textContent = totalVendasAtual;
+  dom.dashAportes.textContent = formatCurrency(outrasEntradasAtual);
+  dom.dashMargem.textContent = formatPercent(margemAtual);
+  dom.dashTicket.textContent = `Ticket medio ${formatCurrency(ticketAtual)}`;
+  dom.dashConversao.textContent = `Conversao ${formatPercent(conversaoAtual)} (anterior ${formatPercent(conversaoAnterior)})`;
+  dom.dashClientes.textContent = `${clientesAtivos} clientes no periodo`;
+
+  setComparisonText(dom.dashEntradasCompare, entradasAtual, entradasAnterior);
+  setComparisonText(dom.dashSaidasCompare, saidasAtual, saidasAnterior, true);
+  setComparisonText(dom.dashSaldoCompare, saldoAtual, saldoAnterior);
+  setComparisonText(dom.dashDreCompare, resultadoLiquidoAtual, resultadoLiquidoAnterior);
+  setComparisonText(dom.dashAportesCompare, outrasEntradasAtual, outrasEntradasAnterior);
+
+  dom.dreReceitaOp.textContent = formatCurrency(receitaOperacionalAtual);
+  dom.dreOutrasEntradas.textContent = formatCurrency(outrasEntradasAtual);
+  dom.dreCustos.textContent = formatCurrency(custosAtual);
+  dom.dreDespesas.textContent = formatCurrency(despesasAtual);
+  dom.dreResultadoOp.textContent = formatCurrency(resultadoOperacionalAtual);
+  dom.dreResultadoLiquido.textContent = formatCurrency(resultadoLiquidoAtual);
+
+  const labelAtual = formatRangeLabel(range);
+  const labelAnterior = formatRangeLabel(previousRange);
+  dom.dashboardPeriodLabel.textContent = `${labelAtual} • comparativo com ${labelAnterior}`;
+  dom.drePeriodLabel.textContent = `Periodo: ${labelAtual}`;
+
+  renderCharts({
+    period,
+    range,
+    financeiroAtual,
+    vendasAtual,
+    orcamentosAtual
+  });
+  renderTopClientes(vendasAtual);
+  renderFinanceiroResumo(financeiroAtual);
 }
 
-function renderCharts() {
-  const statusCounts = state.data.orcamentos.reduce((acc, item) => {
+function renderCharts(context) {
+  const textColor = getChartTextColor();
+  const gridColor = getChartGridColor();
+  const fluxo = buildFluxoSeries(context.period, context.range, context.financeiroAtual);
+
+  updateChart('chart-fluxo', 'line', {
+    labels: fluxo.labels,
+    datasets: [
+      {
+        label: 'Entradas',
+        data: fluxo.entradas,
+        borderColor: '#4dd599',
+        backgroundColor: 'rgba(77, 213, 153, 0.18)',
+        tension: 0.28,
+        fill: false
+      },
+      {
+        label: 'Saidas',
+        data: fluxo.saidas,
+        borderColor: '#ff6b6b',
+        backgroundColor: 'rgba(255, 107, 107, 0.18)',
+        tension: 0.28,
+        fill: false
+      },
+      {
+        label: 'Saldo acumulado',
+        data: fluxo.saldoAcumulado,
+        borderColor: '#d9b45a',
+        backgroundColor: 'rgba(217, 180, 90, 0.2)',
+        tension: 0.32,
+        fill: true
+      }
+    ]
+  }, {
+    plugins: { legend: { labels: { color: textColor } } },
+    scales: {
+      x: { ticks: { color: textColor }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor }, grid: { color: gridColor } }
+    }
+  });
+
+  const saidasByCategoria = context.financeiroAtual
+    .filter((item) => String(item.tipo || '').toLowerCase() === 'saida')
+    .reduce((acc, item) => {
+      const key = item.categoria || 'Outros';
+      acc[key] = (acc[key] || 0) + parseNumber(item.valor);
+      return acc;
+    }, {});
+
+  const categoriasLabels = Object.keys(saidasByCategoria);
+  const categoriasValues = Object.values(saidasByCategoria);
+  updateChart('chart-categorias', 'doughnut', {
+    labels: categoriasLabels.length ? categoriasLabels : ['Sem saidas'],
+    datasets: [{
+      data: categoriasValues.length ? categoriasValues : [1],
+      backgroundColor: ['#ff6b6b', '#d9b45a', '#6aa6ff', '#8aa49c', '#4dd599', '#b88a2f']
+    }]
+  }, {
+    plugins: { legend: { labels: { color: textColor } } }
+  });
+
+  const statusCounts = context.orcamentosAtual.reduce((acc, item) => {
     const key = item.status || 'Em negociacao';
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-
-  const statusLabels = Object.keys(statusCounts);
-  const statusValues = Object.values(statusCounts);
-
-  updateChart('chart-orcamentos', 'doughnut', {
-    labels: statusLabels.length ? statusLabels : ['Sem dados'],
+  updateChart('chart-orcamentos', 'bar', {
+    labels: Object.keys(statusCounts).length ? Object.keys(statusCounts) : ['Sem dados'],
     datasets: [{
-      data: statusValues.length ? statusValues : [1],
-      backgroundColor: ['#d9b45a', '#4dd599', '#ff6b6b', '#8aa49c']
+      label: 'Orcamentos',
+      data: Object.values(statusCounts).length ? Object.values(statusCounts) : [0],
+      backgroundColor: ['#d9b45a', '#4dd599', '#ff6b6b', '#6aa6ff', '#8aa49c']
     }]
   }, {
-    plugins: { legend: { labels: { color: '#f1f5f3' } } }
-  });
-
-  const monthly = aggregateMonthly(state.data.vendas, 'valor');
-  const monthlyLucro = aggregateMonthly(state.data.vendas, 'lucro');
-
-  updateChart('chart-receita', 'bar', {
-    labels: monthly.labels,
-    datasets: [
-      { label: 'Receita', data: monthly.values, backgroundColor: '#d9b45a' },
-      { label: 'Lucro', data: monthlyLucro.values, backgroundColor: '#4dd599' }
-    ]
-  }, {
-    plugins: { legend: { labels: { color: '#f1f5f3' } } },
+    plugins: { legend: { labels: { color: textColor } } },
     scales: {
-      x: { ticks: { color: '#b9c4bf' } },
-      y: { ticks: { color: '#b9c4bf' } }
+      x: { ticks: { color: textColor }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor }, grid: { color: gridColor } }
     }
   });
 
-  const pgtoCounts = state.data.vendas.reduce((acc, item) => {
+  const pgtoCounts = context.vendasAtual.reduce((acc, item) => {
     const key = item.pgto || 'Pendente';
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-
   updateChart('chart-pgto', 'bar', {
-    labels: Object.keys(pgtoCounts),
+    labels: Object.keys(pgtoCounts).length ? Object.keys(pgtoCounts) : ['Sem dados'],
     datasets: [{
       label: 'Vendas',
-      data: Object.values(pgtoCounts),
+      data: Object.values(pgtoCounts).length ? Object.values(pgtoCounts) : [0],
       backgroundColor: '#4dd599'
     }]
   }, {
-    plugins: { legend: { labels: { color: '#f1f5f3' } } },
+    plugins: { legend: { labels: { color: textColor } } },
     indexAxis: 'y',
     scales: {
-      x: { ticks: { color: '#b9c4bf' } },
-      y: { ticks: { color: '#b9c4bf' } }
+      x: { ticks: { color: textColor }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor }, grid: { color: gridColor } }
     }
   });
 }
@@ -732,34 +924,172 @@ function updateChart(canvasId, type, data, options) {
   });
 }
 
-function aggregateMonthly(items, field) {
-  const map = new Map();
-  const now = new Date();
-  for (let i = 5; i >= 0; i -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    map.set(key, 0);
+function buildFluxoSeries(period, range, financeiroRows) {
+  const labels = [];
+  const entradas = [];
+  const saidas = [];
+  const monthShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  let bucketCount = 0;
+
+  if (period === 'today') {
+    bucketCount = 24;
+    for (let h = 0; h < bucketCount; h += 1) {
+      labels.push(`${String(h).padStart(2, '0')}h`);
+      entradas.push(0);
+      saidas.push(0);
+    }
+  } else if (period === 'week') {
+    bucketCount = 7;
+    for (let d = 0; d < bucketCount; d += 1) {
+      const date = new Date(range.start);
+      date.setDate(range.start.getDate() + d);
+      labels.push(date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''));
+      entradas.push(0);
+      saidas.push(0);
+    }
+  } else if (period === 'month') {
+    const daysInMonth = new Date(range.start.getFullYear(), range.start.getMonth() + 1, 0).getDate();
+    bucketCount = daysInMonth;
+    for (let d = 1; d <= bucketCount; d += 1) {
+      labels.push(String(d));
+      entradas.push(0);
+      saidas.push(0);
+    }
+  } else {
+    bucketCount = 12;
+    for (let m = 0; m < bucketCount; m += 1) {
+      labels.push(monthShort[m]);
+      entradas.push(0);
+      saidas.push(0);
+    }
   }
 
-  items.forEach((item) => {
-    const date = new Date(item.dataHora || Date.now());
-    if (Number.isNaN(date.getTime())) return;
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (map.has(key)) {
-      map.set(key, map.get(key) + parseNumber(item[field]));
+  financeiroRows.forEach((item) => {
+    const date = parseDateSafe(item.dataHora);
+    if (!date) return;
+    let index = -1;
+    if (period === 'today') {
+      index = date.getHours();
+    } else if (period === 'week') {
+      const diff = Math.floor((startOfDay(date).getTime() - startOfDay(range.start).getTime()) / 86400000);
+      index = diff;
+    } else if (period === 'month') {
+      index = date.getDate() - 1;
+    } else {
+      index = date.getMonth();
+    }
+    if (index < 0 || index >= bucketCount) return;
+    const value = parseNumber(item.valor);
+    if (String(item.tipo || '').toLowerCase() === 'saida') {
+      saidas[index] += value;
+    } else {
+      entradas[index] += value;
     }
   });
 
-  const labels = Array.from(map.keys()).map((key) => {
-    const [year, month] = key.split('-');
-    return `${month}/${year.slice(2)}`;
-  });
+  const saldoAcumulado = [];
+  let running = 0;
+  for (let i = 0; i < entradas.length; i += 1) {
+    running += entradas[i] - saidas[i];
+    saldoAcumulado.push(running);
+  }
 
-  return { labels, values: Array.from(map.values()) };
+  return { labels, entradas, saidas, saldoAcumulado };
 }
 
-function renderTopClientes() {
-  const ranking = state.data.vendas.reduce((acc, venda) => {
+function sumFinance(items, tipo, extraPredicate = null) {
+  return items.reduce((sum, item) => {
+    const matchTipo = String(item.tipo || '').toLowerCase() === String(tipo || '').toLowerCase();
+    const extraOk = typeof extraPredicate === 'function' ? extraPredicate(item) : true;
+    if (!matchTipo || !extraOk) return sum;
+    return sum + parseNumber(item.valor);
+  }, 0);
+}
+
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function parseDateSafe(value) {
+  const date = new Date(value || 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getPeriodRange(period) {
+  const now = new Date();
+  const start = new Date(now);
+  if (period === 'today') {
+    start.setHours(0, 0, 0, 0);
+  } else if (period === 'week') {
+    const weekDay = (start.getDay() + 6) % 7;
+    start.setDate(start.getDate() - weekDay);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === 'month') {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setMonth(0, 1);
+    start.setHours(0, 0, 0, 0);
+  }
+  return { start, end: now };
+}
+
+function getPreviousRange(range) {
+  const duration = range.end.getTime() - range.start.getTime();
+  const end = new Date(range.start.getTime() - 1);
+  const start = new Date(end.getTime() - duration);
+  return { start, end };
+}
+
+function filterByRange(items, range, field = 'dataHora') {
+  return (items || []).filter((item) => {
+    const date = parseDateSafe(item[field]);
+    if (!date) return false;
+    return date >= range.start && date <= range.end;
+  });
+}
+
+function formatRangeLabel(range) {
+  const startLabel = range.start.toLocaleDateString('pt-BR');
+  const endLabel = range.end.toLocaleDateString('pt-BR');
+  if (startLabel === endLabel) return startLabel;
+  return `${startLabel} ate ${endLabel}`;
+}
+
+function setComparisonText(element, current, previous, reverseGood = false) {
+  if (!element) return;
+  let text = 'Sem variacao';
+  let trendClass = 'metric-flat';
+  const delta = current - previous;
+  if (previous === 0 && current !== 0) {
+    text = 'Novo no periodo';
+    trendClass = reverseGood ? 'metric-down' : 'metric-up';
+  } else if (delta !== 0 && previous !== 0) {
+    const pct = (delta / Math.abs(previous)) * 100;
+    const sign = pct > 0 ? '+' : '';
+    text = `${sign}${pct.toFixed(1)}% vs periodo anterior`;
+    const improved = reverseGood ? delta < 0 : delta > 0;
+    trendClass = improved ? 'metric-up' : 'metric-down';
+  }
+  element.textContent = text;
+  element.classList.remove('metric-up', 'metric-down', 'metric-flat');
+  element.classList.add(trendClass);
+}
+
+function getChartTextColor() {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? '#465048' : '#b9c4bf';
+}
+
+function getChartGridColor() {
+  return document.documentElement.getAttribute('data-theme') === 'light'
+    ? 'rgba(0, 0, 0, 0.08)'
+    : 'rgba(255, 255, 255, 0.08)';
+}
+
+function renderTopClientes(vendasBase = state.data.vendas) {
+  const ranking = (vendasBase || []).reduce((acc, venda) => {
     const key = venda.cliente || 'Sem cliente';
     acc[key] = (acc[key] || 0) + parseNumber(venda.valor);
     return acc;
@@ -769,14 +1099,29 @@ function renderTopClientes() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  dom.topClientes.innerHTML = top
-    .map(([cliente, total]) => `
+  dom.topClientes.innerHTML = top.length
+    ? top.map(([cliente, total]) => `
+        <div class="list-item">
+          <span>${cliente}</span>
+          <strong>${formatCurrency(total)}</strong>
+        </div>
+      `).join('')
+    : '<div class="list-item"><span>Sem vendas no periodo</span><strong>-</strong></div>';
+}
+
+function renderFinanceiroResumo(financeiroRows) {
+  const rows = [...(financeiroRows || [])]
+    .sort((a, b) => new Date(b.dataHora || 0).getTime() - new Date(a.dataHora || 0).getTime())
+    .slice(0, 6);
+
+  dom.financeiroResumoList.innerHTML = rows.length
+    ? rows.map((item) => `
       <div class="list-item">
-        <span>${cliente}</span>
-        <strong>${formatCurrency(total)}</strong>
+        <span>${formatDate(item.dataHora)} • ${item.categoria || '-'}</span>
+        <strong>${String(item.tipo || '').toLowerCase() === 'saida' ? '-' : '+'} ${formatCurrency(item.valor || 0)}</strong>
       </div>
-    `)
-    .join('');
+    `).join('')
+    : '<div class="list-item"><span>Sem movimentacoes no periodo</span><strong>-</strong></div>';
 }
 
 function getClienteTelefone(nome) {
@@ -1168,13 +1513,12 @@ async function confirmVendaFromOrcamento(orcamento) {
   };
 
   try {
-    const venda = await apiRequest('createVenda', payload);
-    state.data.vendas.unshift(venda);
+    await apiRequest('createVenda', payload);
     const updated = { ...orcamento, status: 'Confirmado' };
     await apiRequest('updateOrcamento', updated);
     const index = state.data.orcamentos.findIndex((item) => item.rowIndex === orcamento.rowIndex);
     if (index >= 0) state.data.orcamentos[index] = updated;
-    renderAll();
+    await loadAllData();
     showToast('Venda criada e orcamento confirmado.');
   } catch (error) {
     showToast(error.message || 'Erro ao confirmar venda', 'error');
@@ -1272,10 +1616,8 @@ function openVendaEditor(venda) {
 
     try {
       await apiRequest('updateVenda', updated);
-      const index = state.data.vendas.findIndex((item) => item.rowIndex === venda.rowIndex);
-      if (index >= 0) state.data.vendas[index] = updated;
       closeDrawer();
-      renderAll();
+      await loadAllData();
       showToast('Venda atualizada.');
     } catch (error) {
       showToast(error.message || 'Erro ao atualizar venda', 'error');
@@ -1366,14 +1708,123 @@ async function handleVendaSubmit(event) {
   };
 
   try {
-    const venda = await apiRequest('createVenda', payload);
-    state.data.vendas.unshift(venda);
+    await apiRequest('createVenda', payload);
     event.target.reset();
-    renderAll();
+    await loadAllData();
     showToast('Venda registrada.');
   } catch (error) {
     showToast(error.message || 'Erro ao salvar venda', 'error');
   }
+}
+
+function defaultCategoryByTipo(tipo) {
+  return String(tipo || '').toLowerCase() === 'saida' ? 'Compra de material' : 'Aporte';
+}
+
+function toDateTimeLocalValue(value) {
+  const date = parseDateSafe(value) || new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function handleFinanceiroSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.target);
+  const payload = {
+    dataHora: formData.get('dataHora')
+      ? new Date(String(formData.get('dataHora'))).toISOString()
+      : nowIso(),
+    tipo: formData.get('tipo') || 'Entrada',
+    categoria: formData.get('categoria') || defaultCategoryByTipo(formData.get('tipo')),
+    descricao: formData.get('descricao') || '',
+    valor: parseNumber(formData.get('valor')),
+    origem: 'Manual',
+    referencia: '',
+    obs: formData.get('obs') || ''
+  };
+
+  if (!payload.valor) {
+    showToast('Informe um valor maior que zero.', 'error');
+    return;
+  }
+
+  try {
+    await apiRequest('createFinanceiro', payload);
+    event.target.reset();
+    if (dom.financeiroTipo) dom.financeiroTipo.value = 'Entrada';
+    if (dom.financeiroCategoria) dom.financeiroCategoria.value = 'Aporte';
+    if (dom.financeiroForm) {
+      const dateInput = dom.financeiroForm.querySelector('input[name="dataHora"]');
+      if (dateInput) dateInput.value = toDateTimeLocalValue(nowIso());
+    }
+    await loadAllData();
+    showToast('Lancamento financeiro salvo.');
+  } catch (error) {
+    showToast(error.message || 'Erro ao salvar lancamento', 'error');
+  }
+}
+
+function handleFinanceiroActions(event) {
+  const btn = event.target.closest('button');
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  const action = btn.dataset.action;
+  if (action !== 'edit-financeiro') return;
+  const item = state.data.financeiro.find((row) => row.rowIndex === id);
+  if (!item) return;
+  if (String(item.origem || '').toLowerCase() === 'venda') {
+    showToast('Lancamentos de venda sao sincronizados automaticamente.', 'error');
+    return;
+  }
+  openFinanceiroEditor(item);
+}
+
+function openFinanceiroEditor(item) {
+  openDrawer(`
+    <h3>Editar lancamento #${item.numero || '-'}</h3>
+    <form id="financeiro-edit-form" class="form-grid">
+      <label>Data e hora<input type="datetime-local" name="dataHora" value="${toDateTimeLocalValue(item.dataHora)}" /></label>
+      <label>Tipo
+        <select name="tipo" required>
+          <option value="Entrada">Entrada</option>
+          <option value="Saida">Saida</option>
+        </select>
+      </label>
+      <label>Categoria<input type="text" name="categoria" value="${item.categoria || ''}" required /></label>
+      <label>Valor<input type="number" step="0.01" min="0" name="valor" value="${parseNumber(item.valor)}" required /></label>
+      <label class="full">Descricao<input type="text" name="descricao" value="${item.descricao || ''}" required /></label>
+      <label class="full">Observacoes<input type="text" name="obs" value="${item.obs || ''}" /></label>
+      <button class="btn btn-primary" type="submit">Atualizar lancamento</button>
+    </form>
+  `);
+
+  const form = qs('#financeiro-edit-form');
+  form.querySelector('select[name="tipo"]').value = item.tipo || 'Entrada';
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const formData = new FormData(form);
+    const updated = {
+      ...item,
+      dataHora: formData.get('dataHora')
+        ? new Date(String(formData.get('dataHora'))).toISOString()
+        : item.dataHora,
+      tipo: formData.get('tipo') || 'Entrada',
+      categoria: formData.get('categoria') || '',
+      descricao: formData.get('descricao') || '',
+      valor: parseNumber(formData.get('valor')),
+      origem: item.origem || 'Manual',
+      referencia: item.referencia || '',
+      obs: formData.get('obs') || ''
+    };
+    try {
+      await apiRequest('updateFinanceiro', updated);
+      closeDrawer();
+      await loadAllData();
+      showToast('Lancamento atualizado.');
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar lancamento', 'error');
+    }
+  });
 }
 
 function handleExport(type) {
@@ -1428,13 +1879,40 @@ function setupEvents() {
   dom.clienteForm.addEventListener('submit', handleClienteSubmit);
   dom.orcamentoForm.addEventListener('submit', handleOrcamentoSubmit);
   dom.vendaForm.addEventListener('submit', handleVendaSubmit);
+  dom.financeiroForm.addEventListener('submit', handleFinanceiroSubmit);
 
   dom.clienteSearch.addEventListener('input', renderClientes);
   dom.orcamentoSearch.addEventListener('input', renderOrcamentos);
   dom.vendaSearch.addEventListener('input', renderVendas);
+  dom.financeiroSearch.addEventListener('input', renderFinanceiro);
 
   dom.orcamentoTable.addEventListener('click', handleOrcamentoActions);
   dom.vendaTable.addEventListener('click', handleVendaActions);
+  dom.financeiroTable.addEventListener('click', handleFinanceiroActions);
+
+  if (dom.dashboardPeriod) {
+    dom.dashboardPeriod.addEventListener('click', (event) => {
+      const btn = event.target.closest('.period-btn');
+      if (!btn) return;
+      const period = btn.dataset.period;
+      if (!period || period === state.dashboardPeriod) return;
+      state.dashboardPeriod = period;
+      qsa('.period-btn', dom.dashboardPeriod).forEach((node) => {
+        node.classList.toggle('active', node.dataset.period === period);
+      });
+      renderDashboard();
+    });
+  }
+
+  if (dom.financeiroTipo) {
+    dom.financeiroTipo.addEventListener('change', () => {
+      if (!dom.financeiroCategoria) return;
+      const current = String(dom.financeiroCategoria.value || '').trim().toLowerCase();
+      if (!current || current === 'aporte' || current === 'compra de material') {
+        dom.financeiroCategoria.value = defaultCategoryByTipo(dom.financeiroTipo.value);
+      }
+    });
+  }
 
   dom.saveScriptUrl.addEventListener('click', () => {
     const url = dom.scriptUrl.value.trim();
@@ -1458,6 +1936,15 @@ function setupEvents() {
   });
   dom.exportClientes.addEventListener('click', () => handleExport('clientes'));
   dom.exportVendas.addEventListener('click', () => handleExport('vendas'));
+  dom.exportFinanceiro.addEventListener('click', () => handleExport('financeiro'));
+
+  if (dom.financeiroForm) {
+    const dateInput = dom.financeiroForm.querySelector('input[name="dataHora"]');
+    if (dateInput) dateInput.value = toDateTimeLocalValue(nowIso());
+  }
+  if (dom.financeiroCategoria) {
+    dom.financeiroCategoria.value = defaultCategoryByTipo(dom.financeiroTipo?.value || 'Entrada');
+  }
 }
 
 function init() {
