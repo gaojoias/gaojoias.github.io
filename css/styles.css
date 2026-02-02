@@ -223,6 +223,35 @@ select:focus {
   outline: 2px solid rgba(217, 180, 90, 0.5);
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.password-toggle:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .btn {
   border: none;
   border-radius: 999px;
@@ -1308,6 +1337,10 @@ select:focus {
 [data-theme='light'] .btn-ghost {
   background: rgba(0, 0, 0, 0.05);
   color: var(--text);
+}
+
+[data-theme='light'] .password-toggle:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 [data-theme='light'] .period-btn {
