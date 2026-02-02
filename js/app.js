@@ -74,6 +74,8 @@ const dom = {
   exportFinanceiro: document.getElementById('export-financeiro'),
   dashboardPeriod: document.getElementById('dashboard-period'),
   dashboardPeriodLabel: document.getElementById('dashboard-period-label'),
+  dashSaldoGeral: document.getElementById('dash-saldo-geral'),
+  dashSaldoGeralInfo: document.getElementById('dash-saldo-geral-info'),
   dashEntradas: document.getElementById('dash-entradas'),
   dashEntradasCompare: document.getElementById('dash-entradas-compare'),
   dashSaidas: document.getElementById('dash-saidas'),
@@ -727,6 +729,7 @@ function renderDashboard() {
   const orcamentosAnterior = filterByRange(state.data.orcamentos, previousRange);
   const financeiroAtual = filterByRange(state.data.financeiro, range);
   const financeiroAnterior = filterByRange(state.data.financeiro, previousRange);
+  const financeiroTotal = state.data.financeiro || [];
 
   const entradasAtual = sumFinance(financeiroAtual, 'Entrada');
   const entradasAnterior = sumFinance(financeiroAnterior, 'Entrada');
@@ -734,6 +737,9 @@ function renderDashboard() {
   const saidasAnterior = sumFinance(financeiroAnterior, 'Saida');
   const saldoAtual = entradasAtual - saidasAtual;
   const saldoAnterior = entradasAnterior - saidasAnterior;
+  const entradasTotal = sumFinance(financeiroTotal, 'Entrada');
+  const saidasTotal = sumFinance(financeiroTotal, 'Saida');
+  const saldoGeral = entradasTotal - saidasTotal;
 
   const outrasEntradasAtual = sumFinance(financeiroAtual, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
   const outrasEntradasAnterior = sumFinance(financeiroAnterior, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
@@ -763,6 +769,12 @@ function renderDashboard() {
     vendasAtual.map((item) => item.cliente).concat(orcamentosAtual.map((item) => item.cliente)).filter(Boolean)
   ).size;
 
+  dom.dashSaldoGeral.textContent = formatCurrency(saldoGeral);
+  dom.dashSaldoGeralInfo.textContent = `Entradas ${formatCurrency(entradasTotal)} • Saidas ${formatCurrency(saidasTotal)}`;
+  dom.dashSaldoGeralInfo.classList.remove('metric-up', 'metric-down', 'metric-flat');
+  if (saldoGeral > 0) dom.dashSaldoGeralInfo.classList.add('metric-up');
+  else if (saldoGeral < 0) dom.dashSaldoGeralInfo.classList.add('metric-down');
+  else dom.dashSaldoGeralInfo.classList.add('metric-flat');
   dom.dashEntradas.textContent = formatCurrency(entradasAtual);
   dom.dashSaidas.textContent = formatCurrency(saidasAtual);
   dom.dashSaldo.textContent = formatCurrency(saldoAtual);
