@@ -509,11 +509,9 @@ select:focus {
 @keyframes pulseGlow {
   0%,
   100% {
-    transform: translateY(0);
     box-shadow: 0 0 0 0 rgba(77, 213, 153, 0.15), var(--shadow);
   }
   50% {
-    transform: translateY(-2px);
     box-shadow: 0 0 0 8px rgba(77, 213, 153, 0.05), 0 24px 60px rgba(0, 0, 0, 0.45);
   }
 }
@@ -1289,11 +1287,9 @@ select:focus {
 @keyframes pulseGlowLight {
   0%,
   100% {
-    transform: translateY(0);
     box-shadow: 0 0 0 0 rgba(33, 177, 113, 0.1), var(--shadow);
   }
   50% {
-    transform: translateY(-2px);
     box-shadow: 0 0 0 8px rgba(33, 177, 113, 0.06), 0 18px 38px rgba(0, 0, 0, 0.12);
   }
 }
