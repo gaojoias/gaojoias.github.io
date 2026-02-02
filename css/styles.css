@@ -39,6 +39,13 @@
   font-family: 'Poppins', sans-serif;
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   min-height: 100vh;
   color: var(--text);
@@ -226,6 +233,7 @@ select:focus {
   gap: 8px;
   cursor: pointer;
   transition: var(--sidebar-transition);
+  max-width: 100%;
 }
 
 .btn-primary {
@@ -280,6 +288,8 @@ select:focus {
   grid-template-columns: 270px 1fr;
   min-height: 100vh;
   align-items: start;
+  width: 100%;
+  max-width: 100%;
 }
 
 .sidebar {
@@ -381,6 +391,7 @@ select:focus {
 
 .content {
   padding: 24px 32px 40px;
+  min-width: 0;
 }
 
 .app.collapsed {
@@ -421,6 +432,7 @@ select:focus {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
+  min-width: 0;
 }
 
 .topbar-title h2 {
@@ -432,13 +444,25 @@ select:focus {
   font-size: 13px;
 }
 
+.topbar-title {
+  min-width: 0;
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.topbar-actions > * {
+  min-width: 0;
 }
 
 .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px 12px;
   border-radius: 999px;
   background: rgba(77, 213, 153, 0.2);
@@ -451,6 +475,7 @@ select:focus {
   display: none;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
 }
 
 .view.active {
@@ -498,6 +523,7 @@ select:focus {
   padding: 20px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .panel canvas {
@@ -511,6 +537,11 @@ select:focus {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+  min-width: 0;
+}
+
+.panel-header > * {
+  min-width: 0;
 }
 
 .panel-header h4 {
@@ -555,6 +586,7 @@ select:focus {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  min-width: 0;
 }
 
 .form-grid .full {
@@ -565,6 +597,7 @@ select:focus {
   overflow-x: auto;
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.05);
+  min-width: 0;
 }
 
 .table {
@@ -612,7 +645,7 @@ select:focus {
 
   .table td {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
     padding: 10px 6px;
@@ -625,6 +658,13 @@ select:focus {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    max-width: 45%;
+  }
+
+  .table td > * {
+    max-width: 55%;
+    text-align: right;
+    word-break: break-word;
   }
 
   .table td:last-child {
@@ -635,8 +675,13 @@ select:focus {
     justify-content: flex-start;
   }
 
+  .table td[data-label='Acoes'] > * {
+    max-width: 100%;
+  }
+
   .actions {
     gap: 8px;
+    flex-wrap: wrap;
   }
 }
 
@@ -997,10 +1042,15 @@ select:focus {
 
   .sidebar {
     position: fixed;
-    inset: 0 30% 0 0;
-    transform: translateX(-105%);
+    inset: 0 auto 0 0;
+    width: min(84vw, 320px);
+    max-width: calc(100vw - 52px);
+    transform: translateX(-102%);
     transition: var(--transition);
     z-index: 100;
+    padding: 24px 16px 18px;
+    overflow-x: hidden;
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.45);
   }
 
   .app.collapsed {
@@ -1023,8 +1073,39 @@ select:focus {
   }
 
   .topbar {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .topbar-title {
+    grid-column: 1 / -1;
+  }
+
+  .topbar-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+  }
+
+  .topbar-actions .chip {
+    grid-column: 1 / -1;
+  }
+
+  .topbar-actions .btn,
+  .topbar-actions .chip {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .topbar-actions .btn span,
+  .topbar-actions .chip {
+    white-space: normal;
+    word-break: break-word;
   }
 
   .panel-header {
@@ -1044,8 +1125,17 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
+  .form-grid label {
+    min-width: 0;
+  }
+
   .form-grid .full {
     grid-column: 1 / -1;
+  }
+
+  .form-grid .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -1055,26 +1145,40 @@ select:focus {
   }
 
   .table {
-    min-width: 620px;
+    min-width: 0;
   }
 
   .sidebar {
-    inset: 0 15% 0 0;
+    width: min(88vw, 320px);
+    max-width: calc(100vw - 28px);
   }
 
   .content {
     padding: 16px;
   }
 
-  .topbar-actions {
-    flex-wrap: wrap;
-    width: 100%;
+  .panel {
+    padding: 16px;
   }
 
-  .topbar-actions .btn,
-  .topbar-actions .chip {
-    width: 100%;
-    justify-content: center;
+  .panel-header h4 {
+    font-size: 15px;
+  }
+
+  .form-grid {
+    gap: 10px;
+  }
+
+  .table tbody tr {
+    padding: 6px 8px;
+  }
+
+  .topbar-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-title h2 {
+    font-size: 21px;
   }
 }
 
