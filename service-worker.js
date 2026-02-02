@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gao-joias-v3';
+const CACHE_NAME = 'gao-joias-v4';
 const ASSETS = [
   './',
   './index.html',
