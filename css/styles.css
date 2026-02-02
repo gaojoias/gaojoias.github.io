@@ -511,6 +511,52 @@ select:focus {
   font-size: 24px;
 }
 
+.stat-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.period-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.period-btn {
+  border: 1px solid rgba(217, 180, 90, 0.28);
+  background: rgba(217, 180, 90, 0.08);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.period-btn:hover {
+  border-color: rgba(217, 180, 90, 0.45);
+  color: var(--text);
+}
+
+.period-btn.active {
+  background: rgba(217, 180, 90, 0.18);
+  border-color: rgba(217, 180, 90, 0.55);
+  color: var(--text);
+}
+
+.metric-up {
+  color: var(--green) !important;
+}
+
+.metric-down {
+  color: var(--red) !important;
+}
+
+.metric-flat {
+  color: var(--muted) !important;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -729,6 +775,7 @@ select:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .config-grid {
@@ -1113,6 +1160,15 @@ select:focus {
     align-items: stretch;
   }
 
+  .period-switch {
+    width: 100%;
+  }
+
+  .period-btn {
+    flex: 1 1 calc(50% - 8px);
+    text-align: center;
+  }
+
   .panel-actions {
     width: 100%;
   }
@@ -1180,6 +1236,10 @@ select:focus {
   .topbar-title h2 {
     font-size: 21px;
   }
+
+  .period-btn {
+    flex: 1 1 100%;
+  }
 }
 
 
@@ -1210,6 +1270,16 @@ select:focus {
 [data-theme='light'] .btn-ghost {
   background: rgba(0, 0, 0, 0.05);
   color: var(--text);
+}
+
+[data-theme='light'] .period-btn {
+  border-color: rgba(184, 138, 47, 0.35);
+  background: rgba(184, 138, 47, 0.08);
+}
+
+[data-theme='light'] .period-btn.active {
+  background: rgba(184, 138, 47, 0.18);
+  border-color: rgba(184, 138, 47, 0.5);
 }
 
 [data-theme='light'] input,
