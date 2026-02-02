@@ -72,6 +72,7 @@
         <button class="nav-link" data-view="clientes"><i class="fa-solid fa-user-group"></i><span>Clientes</span></button>
         <button class="nav-link" data-view="orcamentos"><i class="fa-solid fa-file-invoice"></i><span>Orcamentos</span></button>
         <button class="nav-link" data-view="vendas"><i class="fa-solid fa-coins"></i><span>Vendas</span></button>
+        <button class="nav-link" data-view="financeiro" data-admin><i class="fa-solid fa-hand-holding-dollar"></i><span>Financeiro</span></button>
         <button class="nav-link" data-view="logs" data-admin><i class="fa-solid fa-shield-halved"></i><span>Logs</span></button>
         <button class="nav-link" data-view="config" data-admin><i class="fa-solid fa-gear"></i><span>Configuracoes</span></button>
       </nav>
@@ -107,53 +108,110 @@
       </header>
 
       <section id="dashboard" class="view active" data-admin>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Visao executiva</h4>
+            <div class="period-switch" id="dashboard-period">
+              <button class="period-btn active" data-period="today">Hoje</button>
+              <button class="period-btn" data-period="week">Semana</button>
+              <button class="period-btn" data-period="month">Mes</button>
+              <button class="period-btn" data-period="year">Ano</button>
+            </div>
+          </div>
+          <p class="muted" id="dashboard-period-label">Comparando com o periodo anterior equivalente.</p>
+        </div>
+
         <div class="stats-grid">
           <div class="stat-card">
-            <p>Orcamentos ativos</p>
-            <h3 id="stat-orcamentos">0</h3>
-            <span id="stat-conversao">0% de conversao</span>
+            <p>Entradas do periodo</p>
+            <h3 id="dash-entradas">R$ 0,00</h3>
+            <span id="dash-entradas-compare">-</span>
           </div>
           <div class="stat-card">
-            <p>Vendas confirmadas</p>
-            <h3 id="stat-vendas">0</h3>
-            <span id="stat-receita">R$ 0,00</span>
-          </div>
-          <div class="stat-card">
-            <p>Lucro estimado</p>
-            <h3 id="stat-lucro">R$ 0,00</h3>
-            <span id="stat-margem">Margem 0%</span>
+            <p>Saidas do periodo</p>
+            <h3 id="dash-saidas">R$ 0,00</h3>
+            <span id="dash-saidas-compare">-</span>
           </div>
           <div class="stat-card highlight">
-            <p>Clientes ativos</p>
-            <h3 id="stat-clientes">0</h3>
-            <span id="stat-ticket">Ticket medio R$ 0,00</span>
+            <p>Saldo do periodo</p>
+            <h3 id="dash-saldo">R$ 0,00</h3>
+            <span id="dash-saldo-compare">-</span>
+          </div>
+          <div class="stat-card">
+            <p>Resultado DRE</p>
+            <h3 id="dash-dre">R$ 0,00</h3>
+            <span id="dash-dre-compare">-</span>
+          </div>
+          <div class="stat-card">
+            <p>Orcamentos</p>
+            <h3 id="dash-orcamentos">0</h3>
+            <span id="dash-conversao">Conversao 0,0%</span>
+          </div>
+          <div class="stat-card">
+            <p>Vendas</p>
+            <h3 id="dash-vendas">0</h3>
+            <span id="dash-ticket">Ticket medio R$ 0,00</span>
+          </div>
+          <div class="stat-card">
+            <p>Aportes e outras entradas</p>
+            <h3 id="dash-aportes">R$ 0,00</h3>
+            <span id="dash-aportes-compare">-</span>
+          </div>
+          <div class="stat-card">
+            <p>Margem media</p>
+            <h3 id="dash-margem">0,0%</h3>
+            <span id="dash-clientes">0 clientes no periodo</span>
           </div>
         </div>
 
         <div class="grid-2">
           <div class="panel">
             <div class="panel-header">
-              <h4>Status dos orcamentos</h4>
-              <span class="muted">Ultimos 90 dias</span>
+              <h4>Fluxo de caixa do periodo</h4>
+              <span class="muted">Entradas x Saidas</span>
+            </div>
+            <canvas id="chart-fluxo"></canvas>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h4>Saidas por categoria</h4>
+              <span class="muted">Distribuicao</span>
+            </div>
+            <canvas id="chart-categorias"></canvas>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <h4>Status de orcamentos</h4>
+              <span class="muted">No periodo selecionado</span>
             </div>
             <canvas id="chart-orcamentos"></canvas>
           </div>
           <div class="panel">
             <div class="panel-header">
-              <h4>Receita x Lucro</h4>
-              <span class="muted">Acumulado mensal</span>
+              <h4>Vendas por pagamento</h4>
+              <span class="muted">No periodo selecionado</span>
             </div>
-            <canvas id="chart-receita"></canvas>
+            <canvas id="chart-pgto"></canvas>
           </div>
         </div>
 
         <div class="grid-2">
           <div class="panel">
             <div class="panel-header">
-              <h4>Vendas por pagamento</h4>
-              <span class="muted">Distribuicao atual</span>
+              <h4>DRE simplificado</h4>
+              <span class="muted" id="dre-period-label">Periodo atual</span>
             </div>
-            <canvas id="chart-pgto"></canvas>
+            <div class="list">
+              <div class="list-item"><span>Receita operacional (vendas)</span><strong id="dre-receita-op">R$ 0,00</strong></div>
+              <div class="list-item"><span>Outras entradas (aportes)</span><strong id="dre-outras-entradas">R$ 0,00</strong></div>
+              <div class="list-item"><span>(-) Custos das vendas</span><strong id="dre-custos">R$ 0,00</strong></div>
+              <div class="list-item"><span>(-) Despesas operacionais</span><strong id="dre-despesas">R$ 0,00</strong></div>
+              <div class="list-item"><span>Resultado operacional</span><strong id="dre-resultado-op">R$ 0,00</strong></div>
+              <div class="list-item"><span>Resultado liquido de caixa</span><strong id="dre-resultado-liquido">R$ 0,00</strong></div>
+            </div>
           </div>
           <div class="panel">
             <div class="panel-header">
@@ -162,6 +220,14 @@
             </div>
             <div id="top-clientes" class="list"></div>
           </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Ultimas movimentacoes financeiras</h4>
+            <span class="muted">Detalhamento de entradas e saidas</span>
+          </div>
+          <div id="financeiro-resumo-list" class="list"></div>
         </div>
       </section>
 
@@ -322,6 +388,67 @@
         </div>
       </section>
 
+      <section id="financeiro" class="view" data-admin>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Novo lancamento financeiro</h4>
+            <span class="muted">Registre entradas manuais e saidas operacionais</span>
+          </div>
+          <form id="financeiro-form" class="form-grid">
+            <label>Data e hora<input type="datetime-local" name="dataHora" /></label>
+            <label>Tipo
+              <select name="tipo" id="financeiro-tipo" required>
+                <option value="Entrada">Entrada</option>
+                <option value="Saida">Saida</option>
+              </select>
+            </label>
+            <label>Categoria
+              <input type="text" name="categoria" id="financeiro-categoria" list="financeiro-categorias" required />
+            </label>
+            <label>Valor<input type="number" step="0.01" min="0" name="valor" required /></label>
+            <label class="full">Descricao<input type="text" name="descricao" required /></label>
+            <label class="full">Observacoes<input type="text" name="obs" /></label>
+            <datalist id="financeiro-categorias">
+              <option value="Aporte"></option>
+              <option value="Venda avulsa"></option>
+              <option value="Compra de material"></option>
+              <option value="Servico de limpeza"></option>
+              <option value="Servicos terceiros"></option>
+              <option value="Impostos"></option>
+              <option value="Despesas gerais"></option>
+            </datalist>
+            <button class="btn btn-primary" type="submit">Salvar lancamento</button>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Movimentacoes financeiras</h4>
+            <div class="search-input">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input id="financeiro-search" class="input" type="search" placeholder="Buscar por categoria, descricao ou tipo" />
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table class="table" id="financeiro-table">
+              <thead>
+                <tr>
+                  <th>Numero</th>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Categoria</th>
+                  <th>Descricao</th>
+                  <th>Valor</th>
+                  <th>Origem</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="logs" class="view" data-admin>
         <div class="panel">
           <div class="panel-header">
@@ -374,6 +501,7 @@
               <div class="config-actions">
                 <button id="export-clientes" class="btn btn-ghost">Exportar clientes</button>
                 <button id="export-vendas" class="btn btn-ghost">Exportar vendas</button>
+                <button id="export-financeiro" class="btn btn-ghost">Exportar financeiro</button>
               </div>
             </div>
           </div>
