@@ -44,7 +44,12 @@
         </label>
         <label>
           Senha
-          <input type="password" name="senha" required placeholder="Digite sua senha" />
+          <div class="password-field">
+            <input id="login-password" type="password" name="senha" required placeholder="Digite sua senha" />
+            <button id="toggle-password" class="password-toggle" type="button" aria-label="Mostrar senha" title="Mostrar senha">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
         </label>
         <button type="submit" class="btn btn-primary">
           <span>Entrar</span>
