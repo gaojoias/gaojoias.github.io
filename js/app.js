@@ -27,6 +27,8 @@ const dom = {
   loginScreen: document.getElementById('login-screen'),
   appShell: document.getElementById('app-shell'),
   loginForm: document.getElementById('login-form'),
+  loginPassword: document.getElementById('login-password'),
+  togglePassword: document.getElementById('toggle-password'),
   logoutBtn: document.getElementById('logout-btn'),
   navLinks: document.querySelectorAll('.nav-link'),
   views: document.querySelectorAll('.view'),
@@ -1860,6 +1862,19 @@ function handleExport(type) {
 
 function setupEvents() {
   dom.loginForm.addEventListener('submit', handleLogin);
+  if (dom.togglePassword && dom.loginPassword) {
+    dom.togglePassword.addEventListener('click', () => {
+      const isVisible = dom.loginPassword.type === 'text';
+      dom.loginPassword.type = isVisible ? 'password' : 'text';
+      const icon = dom.togglePassword.querySelector('i');
+      if (icon) {
+        icon.className = isVisible ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+      }
+      const actionLabel = isVisible ? 'Mostrar senha' : 'Ocultar senha';
+      dom.togglePassword.setAttribute('aria-label', actionLabel);
+      dom.togglePassword.setAttribute('title', actionLabel);
+    });
+  }
   dom.logoutBtn.addEventListener('click', handleLogout);
   dom.navLinks.forEach((link) => link.addEventListener('click', () => switchView(link.dataset.view)));
   dom.menuBtn.addEventListener('click', () => {
