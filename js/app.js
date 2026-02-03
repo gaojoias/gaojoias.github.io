@@ -1,6 +1,6 @@
 const ADMIN_PASSWORD = 'G@04dm4645#';
 const OP_PASSWORD = 'GAO#123';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxUaIGFtvyBn2YNG4YScFtMLHZG4kOM210kh1Br8xgWRjGAUeLsmV7dN9az9-_kAqdb/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjt2zp_4CciDjsIgpwwf0Jlf63JYPw59H-hGQrDJ-bK1MaRUgexz-mFOV0LPRrOxSh/exec';
 
 const STORAGE_KEYS = {
   scriptUrl: 'gao_script_url',
@@ -17,10 +17,12 @@ const state = {
     orcamentos: [],
     vendas: [],
     logs: [],
-    financeiro: []
+    financeiro: [],
+    lembretes: []
   },
   charts: {},
-  dashboardPeriod: 'today'
+  dashboardPeriod: 'today',
+  reminderNoticeKey: ''
 };
 
 const dom = {
@@ -63,6 +65,11 @@ const dom = {
   financeiroSearch: document.getElementById('financeiro-search'),
   financeiroTipo: document.getElementById('financeiro-tipo'),
   financeiroCategoria: document.getElementById('financeiro-categoria'),
+  financeiroStatus: document.getElementById('financeiro-status'),
+  lembreteForm: document.getElementById('lembrete-form'),
+  lembreteTable: document.getElementById('lembrete-table').querySelector('tbody'),
+  lembreteSearch: document.getElementById('lembrete-search'),
+  lembreteCount: document.getElementById('lembrete-count'),
   logTable: document.getElementById('log-table').querySelector('tbody'),
   orcamentoCliente: document.getElementById('orcamento-cliente'),
   vendaCliente: document.getElementById('venda-cliente'),
@@ -111,6 +118,7 @@ const subtitles = {
   orcamentos: 'Propostas, custos e margens',
   vendas: 'Controle financeiro e pagamentos',
   financeiro: 'Fluxo de caixa, DRE e lancamentos manuais',
+  lembretes: 'Compromissos a pagar e alertas de vencimento',
   logs: 'Auditoria de acessos do sistema',
   config: 'Conecte o Apps Script e exportacoes'
 };
@@ -157,6 +165,20 @@ function formatDateShort(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleDateString('pt-BR');
+}
+
+function formatDateISO(value) {
+  const date = parseDateSafe(value);
+  if (!date) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function toIsoFromDateInput(value) {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString();
 }
 
 function nowIso() {
@@ -260,8 +282,28 @@ function clearSession() {
   localStorage.removeItem(STORAGE_KEYS.session);
 }
 
+function getStoredScriptUrl() {
+  return String(localStorage.getItem(STORAGE_KEYS.scriptUrl) || '').trim();
+}
+
 function getScriptUrl() {
-  return localStorage.getItem(STORAGE_KEYS.scriptUrl) || DEFAULT_SCRIPT_URL;
+  return getStoredScriptUrl() || DEFAULT_SCRIPT_URL;
+}
+
+function setScriptUrl(url) {
+  const value = String(url || '').trim();
+  if (value) {
+    localStorage.setItem(STORAGE_KEYS.scriptUrl, value);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.scriptUrl);
+  }
+  if (dom.scriptUrl) {
+    dom.scriptUrl.value = value || DEFAULT_SCRIPT_URL;
+  }
+}
+
+function isInvalidActionError(message) {
+  return /acao invalida|invalid action/i.test(String(message || ''));
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -312,9 +354,9 @@ function updateLogos(mode) {
   });
 }
 
-function jsonpRequest(action, payload = {}) {
+function jsonpRequest(action, payload = {}, urlOverride = '') {
   return new Promise((resolve, reject) => {
-    const url = getScriptUrl();
+    const url = urlOverride || getScriptUrl();
     const callbackName = `gaoJsonp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const timeout = setTimeout(() => {
       cleanup();
@@ -351,8 +393,7 @@ function jsonpRequest(action, payload = {}) {
   });
 }
 
-async function apiRequest(action, payload = {}) {
-  const url = getScriptUrl();
+async function requestWithUrl(url, action, payload = {}) {
   if (!url) throw new Error('URL do Apps Script nao configurada.');
   try {
     const response = await fetch(url, {
@@ -368,7 +409,26 @@ async function apiRequest(action, payload = {}) {
   } catch (error) {
     const message = String(error && error.message ? error.message : error);
     if (error?.name === 'TypeError' || /NetworkError|Failed to fetch/i.test(message)) {
-      return jsonpRequest(action, payload);
+      return jsonpRequest(action, payload, url);
+    }
+    throw error;
+  }
+}
+
+async function apiRequest(action, payload = {}) {
+  const currentUrl = getScriptUrl();
+  try {
+    return await requestWithUrl(currentUrl, action, payload);
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    if (
+      currentUrl !== DEFAULT_SCRIPT_URL &&
+      isInvalidActionError(message)
+    ) {
+      const fallbackData = await requestWithUrl(DEFAULT_SCRIPT_URL, action, payload);
+      setScriptUrl(DEFAULT_SCRIPT_URL);
+      showToast('URL antiga detectada. Sistema conectado ao deploy mais recente.');
+      return fallbackData;
     }
     throw error;
   }
@@ -382,13 +442,26 @@ async function loadAllData() {
   }
   setLoading(true);
   try {
-    const data = await apiRequest('listAll');
+    let data = await apiRequest('listAll');
+    const hasFinanceData = Array.isArray(data?.financeiro) && Array.isArray(data?.lembretes);
+
+    if (!hasFinanceData && url !== DEFAULT_SCRIPT_URL) {
+      const fallbackData = await requestWithUrl(DEFAULT_SCRIPT_URL, 'listAll');
+      const fallbackHasFinance = Array.isArray(fallbackData?.financeiro) && Array.isArray(fallbackData?.lembretes);
+      if (fallbackHasFinance) {
+        data = fallbackData;
+        setScriptUrl(DEFAULT_SCRIPT_URL);
+        showToast('URL antiga detectada. Sistema conectado ao deploy mais recente.');
+      }
+    }
+
     state.data = {
       clientes: data?.clientes || [],
       orcamentos: data?.orcamentos || [],
       vendas: data?.vendas || [],
       logs: data?.logs || [],
-      financeiro: data?.financeiro || []
+      financeiro: data?.financeiro || [],
+      lembretes: data?.lembretes || []
     };
     renderAll();
   } catch (error) {
@@ -534,6 +607,7 @@ function renderAll() {
   renderOrcamentos();
   renderVendas();
   renderFinanceiro();
+  renderLembretes(true);
   renderLogs();
   renderDashboard();
   renderClienteOptions();
@@ -672,6 +746,8 @@ function renderFinanceiro() {
         String(item.tipo || '').toLowerCase().includes(search) ||
         String(item.categoria || '').toLowerCase().includes(search) ||
         String(item.descricao || '').toLowerCase().includes(search) ||
+        String(item.status || '').toLowerCase().includes(search) ||
+        String(item.vencimento || '').toLowerCase().includes(search) ||
         String(item.origem || '').toLowerCase().includes(search)
       );
     });
@@ -679,6 +755,11 @@ function renderFinanceiro() {
   dom.financeiroTable.innerHTML = rows
     .map((item) => {
       const tipoClass = String(item.tipo || '').toLowerCase() === 'saida' ? 'danger' : 'success';
+      const status = getFinanceStatus(item);
+      const isPendente = String(status).toLowerCase() === 'a pagar';
+      const vencDate = parseDateSafe(item.vencimento);
+      const isAtrasado = isPendente && vencDate && startOfDay(vencDate).getTime() < startOfDay(new Date()).getTime();
+      const statusClass = isPendente ? (isAtrasado ? 'danger' : 'warn') : 'success';
       const canEdit = state.perfil === 'Administrador' && String(item.origem || '').toLowerCase() !== 'venda';
       return `
         <tr>
@@ -688,6 +769,8 @@ function renderFinanceiro() {
           <td data-label="Categoria">${item.categoria || '-'}</td>
           <td data-label="Descricao">${item.descricao || '-'}</td>
           <td data-label="Valor">${formatCurrency(item.valor || 0)}</td>
+          <td data-label="Status"><span class="badge ${statusClass}">${status}</span></td>
+          <td data-label="Vencimento">${formatDateShort(item.vencimento)}</td>
           <td data-label="Origem">${item.origem || '-'}</td>
           <td data-label="Acoes">
             <div class="actions">
@@ -698,6 +781,122 @@ function renderFinanceiro() {
       `;
     })
     .join('');
+}
+
+function getLembretesData() {
+  const financeirosAPagar = (state.data.financeiro || [])
+    .filter((item) => String(getFinanceStatus(item)).toLowerCase() === 'a pagar')
+    .map((item) => ({
+      source: 'financeiro',
+      rowIndex: item.rowIndex,
+      vencimento: item.vencimento || '',
+      titulo: item.categoria || `Lancamento ${item.numero || ''}`.trim(),
+      descricao: `${item.descricao || ''}${item.valor !== undefined ? ` • ${formatCurrency(item.valor)}` : ''}`.trim(),
+      status: getFinanceStatus(item),
+      origem: 'Financeiro',
+      isPending: true
+    }));
+
+  const manuais = (state.data.lembretes || []).map((item) => ({
+    source: 'manual',
+    rowIndex: item.rowIndex,
+    vencimento: item.vencimento || '',
+    titulo: item.titulo || '-',
+    descricao: item.descricao || '-',
+    status: item.status || 'Pendente',
+    origem: item.origem || 'Manual',
+    isPending: String(item.status || 'Pendente').toLowerCase() !== 'concluido'
+  }));
+
+  return financeirosAPagar
+    .concat(manuais)
+    .sort((a, b) => {
+      const da = parseDateSafe(a.vencimento);
+      const db = parseDateSafe(b.vencimento);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.getTime() - db.getTime();
+    });
+}
+
+function renderLembretes(allowNotify = false) {
+  const search = dom.lembreteSearch?.value?.toLowerCase() || '';
+  const allRows = getLembretesData();
+  const rows = allRows.filter((item) => {
+    if (!search) return true;
+    return (
+      String(item.titulo || '').toLowerCase().includes(search) ||
+      String(item.descricao || '').toLowerCase().includes(search) ||
+      String(item.origem || '').toLowerCase().includes(search) ||
+      String(item.status || '').toLowerCase().includes(search) ||
+      String(item.vencimento || '').toLowerCase().includes(search)
+    );
+  });
+
+  dom.lembreteTable.innerHTML = rows
+    .map((item) => {
+      const venc = parseDateSafe(item.vencimento);
+      const overdue = item.isPending && venc && startOfDay(venc).getTime() < startOfDay(new Date()).getTime();
+      const statusClass = overdue ? 'danger' : (item.isPending ? 'warn' : 'success');
+      const actions = item.source === 'financeiro'
+        ? `<button class="btn btn-ghost action-btn" data-action="mark-paid" data-id="${item.rowIndex}" title="Marcar como pago"><i class="fa-solid fa-circle-check"></i></button>`
+        : `
+            <button class="btn btn-ghost action-btn" data-action="edit-lembrete" data-id="${item.rowIndex}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-ghost action-btn" data-action="toggle-lembrete" data-id="${item.rowIndex}" title="Alternar status"><i class="fa-solid fa-check-double"></i></button>
+          `;
+      return `
+        <tr>
+          <td data-label="Vencimento">${formatDateShort(item.vencimento)}</td>
+          <td data-label="Titulo">${item.titulo || '-'}</td>
+          <td data-label="Descricao">${item.descricao || '-'}</td>
+          <td data-label="Status"><span class="badge ${statusClass}">${item.status || '-'}</span></td>
+          <td data-label="Origem">${item.origem || '-'}</td>
+          <td data-label="Acoes"><div class="actions">${actions}</div></td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const pendingCount = allRows.filter((item) => item.isPending).length;
+  if (dom.lembreteCount) {
+    dom.lembreteCount.textContent = pendingCount ? `(${pendingCount})` : '';
+  }
+
+  if (allowNotify) {
+    notifyAdminReminders(allRows);
+  }
+}
+
+function notifyAdminReminders(rows) {
+  if (state.perfil !== 'Administrador') return;
+  const pending = rows.filter((item) => item.isPending);
+  if (!pending.length) {
+    state.reminderNoticeKey = '0-0';
+    return;
+  }
+  const today = startOfDay(new Date()).getTime();
+  const soonLimit = today + (7 * 24 * 60 * 60 * 1000);
+  const overdueCount = pending.filter((item) => {
+    const venc = parseDateSafe(item.vencimento);
+    return venc && startOfDay(venc).getTime() < today;
+  }).length;
+  const dueSoonCount = pending.filter((item) => {
+    const venc = parseDateSafe(item.vencimento);
+    if (!venc) return false;
+    const time = startOfDay(venc).getTime();
+    return time >= today && time <= soonLimit;
+  }).length;
+  const reminderKey = `${pending.length}-${overdueCount}-${dueSoonCount}`;
+  if (state.reminderNoticeKey === reminderKey) return;
+  state.reminderNoticeKey = reminderKey;
+  if (overdueCount > 0) {
+    showToast(`Voce possui ${overdueCount} compromisso(s) vencido(s).`, 'error');
+    return;
+  }
+  if (dueSoonCount > 0) {
+    showToast(`Voce possui ${dueSoonCount} compromisso(s) a vencer nos proximos 7 dias.`);
+  }
 }
 
 function renderLogs() {
@@ -732,27 +931,45 @@ function renderDashboard() {
   const financeiroAtual = filterByRange(state.data.financeiro, range);
   const financeiroAnterior = filterByRange(state.data.financeiro, previousRange);
   const financeiroTotal = state.data.financeiro || [];
+  const financeiroAtualPago = financeiroAtual.filter(isFinancePaid);
+  const financeiroAnteriorPago = financeiroAnterior.filter(isFinancePaid);
+  const financeiroTotalPago = financeiroTotal.filter(isFinancePaid);
 
-  const entradasAtual = sumFinance(financeiroAtual, 'Entrada');
-  const entradasAnterior = sumFinance(financeiroAnterior, 'Entrada');
-  const saidasAtual = sumFinance(financeiroAtual, 'Saida');
-  const saidasAnterior = sumFinance(financeiroAnterior, 'Saida');
+  const entradasAtual = sumFinance(financeiroAtualPago, 'Entrada');
+  const entradasAnterior = sumFinance(financeiroAnteriorPago, 'Entrada');
+  const saidasAtual = sumFinance(financeiroAtualPago, 'Saida');
+  const saidasAnterior = sumFinance(financeiroAnteriorPago, 'Saida');
   const saldoAtual = entradasAtual - saidasAtual;
   const saldoAnterior = entradasAnterior - saidasAnterior;
-  const entradasTotal = sumFinance(financeiroTotal, 'Entrada');
-  const saidasTotal = sumFinance(financeiroTotal, 'Saida');
+  const entradasTotal = sumFinance(financeiroTotalPago, 'Entrada');
+  const saidasTotal = sumFinance(financeiroTotalPago, 'Saida');
   const saldoGeral = entradasTotal - saidasTotal;
 
-  const outrasEntradasAtual = sumFinance(financeiroAtual, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
-  const outrasEntradasAnterior = sumFinance(financeiroAnterior, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
+  const outrasEntradasAtual = sumFinance(financeiroAtualPago, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
+  const outrasEntradasAnterior = sumFinance(financeiroAnteriorPago, 'Entrada', (item) => String(item.origem || '').toLowerCase() !== 'venda');
   const despesasAtual = saidasAtual;
   const despesasAnterior = saidasAnterior;
 
-  const receitaOperacionalAtual = vendasAtual.reduce((sum, item) => sum + parseNumber(item.valor), 0);
-  const receitaOperacionalAnterior = vendasAnterior.reduce((sum, item) => sum + parseNumber(item.valor), 0);
-  const custosAtual = vendasAtual.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
-  const custosAnterior = vendasAnterior.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
-  const lucroAtual = vendasAtual.reduce((sum, item) => sum + parseNumber(item.lucro), 0);
+  const vendasPagasRefsAtual = new Set(
+    financeiroAtualPago
+      .filter((item) => String(item.origem || '').toLowerCase() === 'venda')
+      .map((item) => String(item.referencia || '').trim())
+      .filter(Boolean)
+  );
+  const vendasPagasRefsAnterior = new Set(
+    financeiroAnteriorPago
+      .filter((item) => String(item.origem || '').toLowerCase() === 'venda')
+      .map((item) => String(item.referencia || '').trim())
+      .filter(Boolean)
+  );
+  const vendasAtualContabilizadas = vendasAtual.filter((item) => vendasPagasRefsAtual.has(String(item.numero || '').trim()));
+  const vendasAnteriorContabilizadas = vendasAnterior.filter((item) => vendasPagasRefsAnterior.has(String(item.numero || '').trim()));
+
+  const receitaOperacionalAtual = vendasAtualContabilizadas.reduce((sum, item) => sum + parseNumber(item.valor), 0);
+  const receitaOperacionalAnterior = vendasAnteriorContabilizadas.reduce((sum, item) => sum + parseNumber(item.valor), 0);
+  const custosAtual = vendasAtualContabilizadas.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
+  const custosAnterior = vendasAnteriorContabilizadas.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
+  const lucroAtual = vendasAtualContabilizadas.reduce((sum, item) => sum + parseNumber(item.lucro), 0);
 
   const resultadoOperacionalAtual = receitaOperacionalAtual - custosAtual - despesasAtual;
   const resultadoOperacionalAnterior = receitaOperacionalAnterior - custosAnterior - despesasAnterior;
@@ -761,18 +978,18 @@ function renderDashboard() {
 
   const totalOrcamentosAtual = orcamentosAtual.length;
   const totalOrcamentosAnterior = orcamentosAnterior.length;
-  const totalVendasAtual = vendasAtual.length;
-  const totalVendasAnterior = vendasAnterior.length;
+  const totalVendasAtual = vendasAtualContabilizadas.length;
+  const totalVendasAnterior = vendasAnteriorContabilizadas.length;
   const conversaoAtual = totalOrcamentosAtual ? (totalVendasAtual / totalOrcamentosAtual) * 100 : 0;
   const conversaoAnterior = totalOrcamentosAnterior ? (totalVendasAnterior / totalOrcamentosAnterior) * 100 : 0;
   const ticketAtual = totalVendasAtual ? receitaOperacionalAtual / totalVendasAtual : 0;
   const margemAtual = receitaOperacionalAtual ? (lucroAtual / receitaOperacionalAtual) * 100 : 0;
   const clientesAtivos = new Set(
-    vendasAtual.map((item) => item.cliente).concat(orcamentosAtual.map((item) => item.cliente)).filter(Boolean)
+    vendasAtualContabilizadas.map((item) => item.cliente).concat(orcamentosAtual.map((item) => item.cliente)).filter(Boolean)
   ).size;
 
   dom.dashSaldoGeral.textContent = formatCurrency(saldoGeral);
-  dom.dashSaldoGeralInfo.textContent = `Entradas ${formatCurrency(entradasTotal)} • Saidas ${formatCurrency(saidasTotal)}`;
+  dom.dashSaldoGeralInfo.textContent = `Entradas pagas ${formatCurrency(entradasTotal)} • Saidas pagas ${formatCurrency(saidasTotal)}`;
   dom.dashSaldoGeralInfo.classList.remove('metric-up', 'metric-down', 'metric-flat');
   if (saldoGeral > 0) dom.dashSaldoGeralInfo.classList.add('metric-up');
   else if (saldoGeral < 0) dom.dashSaldoGeralInfo.classList.add('metric-down');
@@ -810,12 +1027,12 @@ function renderDashboard() {
   renderCharts({
     period,
     range,
-    financeiroAtual,
-    vendasAtual,
+    financeiroAtual: financeiroAtualPago,
+    vendasAtual: vendasAtualContabilizadas,
     orcamentosAtual
   });
-  renderTopClientes(vendasAtual);
-  renderFinanceiroResumo(financeiroAtual);
+  renderTopClientes(vendasAtualContabilizadas);
+  renderFinanceiroResumo(financeiroAtualPago);
 }
 
 function renderCharts(context) {
@@ -1522,7 +1739,7 @@ async function confirmVendaFromOrcamento(orcamento) {
     totalCustos: orcamento.totalCustos,
     lucro: orcamento.lucro,
     margem: orcamento.margem,
-    pgto: 'Pendente',
+    pgto: 'Pix',
     obs: orcamento.obsPublic
   };
 
@@ -1595,9 +1812,8 @@ function openVendaEditor(venda) {
         <select name="pgto" required>
           <option value="Dinheiro">Dinheiro</option>
           <option value="Pix">Pix</option>
-          <option value="Credito">Credito</option>
-          <option value="Debito">Debito</option>
-          <option value="Pendente">Pendente</option>
+          <option value="Crédito">Crédito</option>
+          <option value="Débito">Débito</option>
         </select>
       </label>
       <label class="full">Observacoes<input type="text" name="obs" value="${venda.obs || ''}" /></label>
@@ -1606,7 +1822,10 @@ function openVendaEditor(venda) {
   `);
 
   const form = qs('#venda-edit-form');
-  form.querySelector('select[name="pgto"]').value = venda.pgto || 'Pendente';
+  const pgtoSelect = form.querySelector('select[name="pgto"]');
+  const pgtoAtual = String(venda.pgto || '').trim();
+  const pgtoValido = ['Dinheiro', 'Pix', 'Crédito', 'Débito'].includes(pgtoAtual);
+  pgtoSelect.value = pgtoValido ? pgtoAtual : 'Pix';
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1624,7 +1843,7 @@ function openVendaEditor(venda) {
       totalCustos,
       lucro,
       margem,
-      pgto: formData.get('pgto') || 'Pendente',
+      pgto: formData.get('pgto') || 'Pix',
       obs: formData.get('obs') || ''
     };
 
@@ -1717,7 +1936,7 @@ async function handleVendaSubmit(event) {
     totalCustos,
     lucro,
     margem,
-    pgto: formData.get('pgto') || 'Pendente',
+    pgto: formData.get('pgto') || 'Pix',
     obs: formData.get('obs') || ''
   };
 
@@ -1733,6 +1952,24 @@ async function handleVendaSubmit(event) {
 
 function defaultCategoryByTipo(tipo) {
   return String(tipo || '').toLowerCase() === 'saida' ? 'Compra de material' : 'Aporte';
+}
+
+function defaultStatusByTipo(tipo) {
+  return String(tipo || '').toLowerCase() === 'saida' ? 'A pagar' : 'Pago';
+}
+
+function getFinanceStatus(item) {
+  const status = String(item?.status || '').trim();
+  if (status) return status;
+  return defaultStatusByTipo(item?.tipo);
+}
+
+function isPaidStatus(status) {
+  return String(status || '').trim().toLowerCase() === 'pago';
+}
+
+function isFinancePaid(item) {
+  return isPaidStatus(item?.status);
 }
 
 function toDateTimeLocalValue(value) {
@@ -1752,6 +1989,8 @@ async function handleFinanceiroSubmit(event) {
     categoria: formData.get('categoria') || defaultCategoryByTipo(formData.get('tipo')),
     descricao: formData.get('descricao') || '',
     valor: parseNumber(formData.get('valor')),
+    status: formData.get('status') || defaultStatusByTipo(formData.get('tipo')),
+    vencimento: toIsoFromDateInput(String(formData.get('vencimento') || '')),
     origem: 'Manual',
     referencia: '',
     obs: formData.get('obs') || ''
@@ -1761,12 +2000,17 @@ async function handleFinanceiroSubmit(event) {
     showToast('Informe um valor maior que zero.', 'error');
     return;
   }
+  if (String(payload.status).toLowerCase() === 'a pagar' && !payload.vencimento) {
+    showToast('Informe o vencimento para lancamentos a pagar.', 'error');
+    return;
+  }
 
   try {
     await apiRequest('createFinanceiro', payload);
     event.target.reset();
     if (dom.financeiroTipo) dom.financeiroTipo.value = 'Entrada';
     if (dom.financeiroCategoria) dom.financeiroCategoria.value = 'Aporte';
+    if (dom.financeiroStatus) dom.financeiroStatus.value = 'Pago';
     if (dom.financeiroForm) {
       const dateInput = dom.financeiroForm.querySelector('input[name="dataHora"]');
       if (dateInput) dateInput.value = toDateTimeLocalValue(nowIso());
@@ -1806,6 +2050,13 @@ function openFinanceiroEditor(item) {
       </label>
       <label>Categoria<input type="text" name="categoria" value="${item.categoria || ''}" required /></label>
       <label>Valor<input type="number" step="0.01" min="0" name="valor" value="${parseNumber(item.valor)}" required /></label>
+      <label>Status
+        <select name="status" required>
+          <option value="Pago">Pago</option>
+          <option value="A pagar">A pagar</option>
+        </select>
+      </label>
+      <label>Vencimento<input type="date" name="vencimento" value="${formatDateISO(item.vencimento)}" /></label>
       <label class="full">Descricao<input type="text" name="descricao" value="${item.descricao || ''}" required /></label>
       <label class="full">Observacoes<input type="text" name="obs" value="${item.obs || ''}" /></label>
       <button class="btn btn-primary" type="submit">Atualizar lancamento</button>
@@ -1814,6 +2065,7 @@ function openFinanceiroEditor(item) {
 
   const form = qs('#financeiro-edit-form');
   form.querySelector('select[name="tipo"]').value = item.tipo || 'Entrada';
+  form.querySelector('select[name="status"]').value = item.status || defaultStatusByTipo(item.tipo || 'Entrada');
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const formData = new FormData(form);
@@ -1826,10 +2078,16 @@ function openFinanceiroEditor(item) {
       categoria: formData.get('categoria') || '',
       descricao: formData.get('descricao') || '',
       valor: parseNumber(formData.get('valor')),
+      status: formData.get('status') || defaultStatusByTipo(formData.get('tipo')),
+      vencimento: toIsoFromDateInput(String(formData.get('vencimento') || '')),
       origem: item.origem || 'Manual',
       referencia: item.referencia || '',
       obs: formData.get('obs') || ''
     };
+    if (String(updated.status).toLowerCase() === 'a pagar' && !updated.vencimento) {
+      showToast('Informe o vencimento para lancamentos a pagar.', 'error');
+      return;
+    }
     try {
       await apiRequest('updateFinanceiro', updated);
       closeDrawer();
@@ -1837,6 +2095,116 @@ function openFinanceiroEditor(item) {
       showToast('Lancamento atualizado.');
     } catch (error) {
       showToast(error.message || 'Erro ao atualizar lancamento', 'error');
+    }
+  });
+}
+
+async function handleLembreteSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.target);
+  const payload = {
+    dataHora: nowIso(),
+    titulo: formData.get('titulo') || '',
+    descricao: formData.get('descricao') || '',
+    vencimento: toIsoFromDateInput(String(formData.get('vencimento') || '')),
+    status: formData.get('status') || 'Pendente',
+    origem: 'Manual',
+    obs: formData.get('obs') || ''
+  };
+  if (!payload.titulo || !payload.descricao || !payload.vencimento) {
+    showToast('Preencha titulo, descricao e vencimento.', 'error');
+    return;
+  }
+  try {
+    await apiRequest('createLembrete', payload);
+    event.target.reset();
+    await loadAllData();
+    showToast('Lembrete cadastrado.');
+  } catch (error) {
+    showToast(error.message || 'Erro ao salvar lembrete', 'error');
+  }
+}
+
+async function handleLembretesActions(event) {
+  const btn = event.target.closest('button');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const id = Number(btn.dataset.id);
+  if (!id || !action) return;
+
+  if (action === 'mark-paid') {
+    const financeiro = state.data.financeiro.find((item) => item.rowIndex === id);
+    if (!financeiro) return;
+    const updated = { ...financeiro, status: 'Pago' };
+    try {
+      await apiRequest('updateFinanceiro', updated);
+      await loadAllData();
+      showToast('Compromisso marcado como pago.');
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar compromisso', 'error');
+    }
+    return;
+  }
+
+  const lembrete = state.data.lembretes.find((item) => item.rowIndex === id);
+  if (!lembrete) return;
+
+  if (action === 'edit-lembrete') {
+    openLembreteEditor(lembrete);
+    return;
+  }
+
+  if (action === 'toggle-lembrete') {
+    const status = String(lembrete.status || 'Pendente').toLowerCase() === 'concluido' ? 'Pendente' : 'Concluido';
+    try {
+      await apiRequest('updateLembrete', { ...lembrete, status });
+      await loadAllData();
+      showToast(`Lembrete ${status === 'Concluido' ? 'concluido' : 'reaberto'}.`);
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar lembrete', 'error');
+    }
+  }
+}
+
+function openLembreteEditor(lembrete) {
+  openDrawer(`
+    <h3>Editar lembrete #${lembrete.numero || '-'}</h3>
+    <form id="lembrete-edit-form" class="form-grid">
+      <label>Titulo<input type="text" name="titulo" value="${lembrete.titulo || ''}" required /></label>
+      <label>Status
+        <select name="status" required>
+          <option value="Pendente">Pendente</option>
+          <option value="Concluido">Concluido</option>
+        </select>
+      </label>
+      <label>Vencimento<input type="date" name="vencimento" value="${formatDateISO(lembrete.vencimento)}" required /></label>
+      <label class="full">Descricao<input type="text" name="descricao" value="${lembrete.descricao || ''}" required /></label>
+      <label class="full">Observacoes<input type="text" name="obs" value="${lembrete.obs || ''}" /></label>
+      <button class="btn btn-primary" type="submit">Atualizar lembrete</button>
+    </form>
+  `);
+
+  const form = qs('#lembrete-edit-form');
+  form.querySelector('select[name="status"]').value = lembrete.status || 'Pendente';
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const formData = new FormData(form);
+    const updated = {
+      ...lembrete,
+      titulo: formData.get('titulo') || '',
+      descricao: formData.get('descricao') || '',
+      vencimento: toIsoFromDateInput(String(formData.get('vencimento') || '')),
+      status: formData.get('status') || 'Pendente',
+      origem: lembrete.origem || 'Manual',
+      obs: formData.get('obs') || ''
+    };
+    try {
+      await apiRequest('updateLembrete', updated);
+      closeDrawer();
+      await loadAllData();
+      showToast('Lembrete atualizado.');
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar lembrete', 'error');
     }
   });
 }
@@ -1907,15 +2275,18 @@ function setupEvents() {
   dom.orcamentoForm.addEventListener('submit', handleOrcamentoSubmit);
   dom.vendaForm.addEventListener('submit', handleVendaSubmit);
   dom.financeiroForm.addEventListener('submit', handleFinanceiroSubmit);
+  dom.lembreteForm.addEventListener('submit', handleLembreteSubmit);
 
   dom.clienteSearch.addEventListener('input', renderClientes);
   dom.orcamentoSearch.addEventListener('input', renderOrcamentos);
   dom.vendaSearch.addEventListener('input', renderVendas);
   dom.financeiroSearch.addEventListener('input', renderFinanceiro);
+  dom.lembreteSearch.addEventListener('input', () => renderLembretes(false));
 
   dom.orcamentoTable.addEventListener('click', handleOrcamentoActions);
   dom.vendaTable.addEventListener('click', handleVendaActions);
   dom.financeiroTable.addEventListener('click', handleFinanceiroActions);
+  dom.lembreteTable.addEventListener('click', handleLembretesActions);
 
   if (dom.dashboardPeriod) {
     dom.dashboardPeriod.addEventListener('click', (event) => {
@@ -1933,10 +2304,14 @@ function setupEvents() {
 
   if (dom.financeiroTipo) {
     dom.financeiroTipo.addEventListener('change', () => {
-      if (!dom.financeiroCategoria) return;
-      const current = String(dom.financeiroCategoria.value || '').trim().toLowerCase();
-      if (!current || current === 'aporte' || current === 'compra de material') {
-        dom.financeiroCategoria.value = defaultCategoryByTipo(dom.financeiroTipo.value);
+      if (dom.financeiroCategoria) {
+        const current = String(dom.financeiroCategoria.value || '').trim().toLowerCase();
+        if (!current || current === 'aporte' || current === 'compra de material') {
+          dom.financeiroCategoria.value = defaultCategoryByTipo(dom.financeiroTipo.value);
+        }
+      }
+      if (dom.financeiroStatus) {
+        dom.financeiroStatus.value = defaultStatusByTipo(dom.financeiroTipo.value);
       }
     });
   }
@@ -1944,7 +2319,7 @@ function setupEvents() {
   dom.saveScriptUrl.addEventListener('click', () => {
     const url = dom.scriptUrl.value.trim();
     if (!url) return;
-    localStorage.setItem(STORAGE_KEYS.scriptUrl, url);
+    setScriptUrl(url);
     showToast('URL salva.');
     loadAllData();
   });
@@ -1971,6 +2346,9 @@ function setupEvents() {
   }
   if (dom.financeiroCategoria) {
     dom.financeiroCategoria.value = defaultCategoryByTipo(dom.financeiroTipo?.value || 'Entrada');
+  }
+  if (dom.financeiroStatus) {
+    dom.financeiroStatus.value = defaultStatusByTipo(dom.financeiroTipo?.value || 'Entrada');
   }
 }
 
