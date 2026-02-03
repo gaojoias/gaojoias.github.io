@@ -107,11 +107,14 @@ body {
   transform: translateY(-10px);
   transition: var(--transition);
   z-index: 200;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .toast.show {
   opacity: 1;
   transform: translateY(0);
+  visibility: visible;
 }
 
 .loading {
