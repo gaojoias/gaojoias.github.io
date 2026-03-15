@@ -1,6 +1,6 @@
 const ADMIN_PASSWORD = 'G@04dm4645#';
 const OP_PASSWORD = 'GAO#123';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjt2zp_4CciDjsIgpwwf0Jlf63JYPw59H-hGQrDJ-bK1MaRUgexz-mFOV0LPRrOxSh/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzblK4WLxWBY8EfkqBcYhG6MXY5uOT2D5lcbO0an1-qs1rwXbHex__cqoqZAmnt-P5x/exec';
 
 const STORAGE_KEYS = {
   scriptUrl: 'gao_script_url',
@@ -122,6 +122,10 @@ const subtitles = {
   logs: 'Auditoria de acessos do sistema',
   config: 'Conecte o Apps Script e exportacoes'
 };
+
+const ITEM_TYPES = ['Produto', 'Servico'];
+const PAYMENT_METHODS = ['Pix', 'Credito', 'Debito', 'Dinheiro'];
+const PAYMENT_STATUSES = ['Pago', 'Pendente'];
 
 function qs(selector, scope = document) {
   return scope.querySelector(selector);
@@ -263,6 +267,891 @@ function calcOrcamentoValues(payload) {
     margem,
     valorCobrado
   };
+}
+
+function makeUid(prefix = 'id') {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function roundCurrencyValue(value) {
+  return Math.round(parseNumber(value) * 100) / 100;
+}
+
+function parseJsonArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function parseJsonObject(value) {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function formatDateForInput(value) {
+  return formatDateISO(value);
+}
+
+function normalizeItem(item = {}, fallbackTitle = 'Item') {
+  const quantidade = Math.max(parseNumber(item.quantidade) || 1, 0.01);
+  const valorUnitario = roundCurrencyValue(item.valorUnitario !== undefined ? item.valorUnitario : item.valor);
+  const custoUnitario = roundCurrencyValue(item.custoUnitario);
+  return {
+    id: item.id || makeUid('item'),
+    tipo: ITEM_TYPES.includes(item.tipo) ? item.tipo : 'Produto',
+    titulo: String(item.titulo || item.nome || fallbackTitle).trim(),
+    descricao: String(item.descricao || '').trim(),
+    quantidade,
+    valorUnitario,
+    custoUnitario
+  };
+}
+
+function normalizePayment(payment = {}, fallbackDescription = 'Parcela') {
+  const forma = PAYMENT_METHODS.includes(payment.forma) ? payment.forma : 'Pix';
+  const status = PAYMENT_STATUSES.includes(payment.status) ? payment.status : 'Pendente';
+  return {
+    id: payment.id || makeUid('pay'),
+    descricao: String(payment.descricao || fallbackDescription).trim(),
+    valor: roundCurrencyValue(payment.valor),
+    forma,
+    status,
+    vencimento: payment.vencimento || '',
+    recebidoEm: payment.recebidoEm || ''
+  };
+}
+
+function getOrcamentoItems(orcamento = {}) {
+  const parsed = parseJsonArray(orcamento.itensJson).map((item, index) => normalizeItem(item, `Item ${index + 1}`));
+  if (parsed.length) return parsed;
+  const valorTotal = roundCurrencyValue(orcamento.valorTotal || (parseNumber(orcamento.totalCustos) + parseNumber(orcamento.lucro)));
+  const hasCustoMaterial = orcamento.custoMaterial !== undefined && orcamento.custoMaterial !== null && orcamento.custoMaterial !== '';
+  const custoOutros = roundCurrencyValue(orcamento.custoOutros);
+  const custoTotal = hasCustoMaterial
+    ? roundCurrencyValue(orcamento.custoMaterial)
+    : roundCurrencyValue(Math.max(parseNumber(orcamento.totalCustos) - custoOutros, 0));
+  if (!orcamento.produtoServico && !orcamento.descricao && !valorTotal) return [];
+  return [normalizeItem({
+    id: makeUid('item'),
+    tipo: 'Produto',
+    titulo: orcamento.produtoServico || 'Item unico',
+    descricao: orcamento.descricao || '',
+    quantidade: 1,
+    valorUnitario: valorTotal,
+    custoUnitario: custoTotal
+  })];
+}
+
+function getVendaItems(venda = {}) {
+  const parsed = parseJsonArray(venda.itensJson).map((item, index) => normalizeItem(item, `Item ${index + 1}`));
+  if (parsed.length) return parsed;
+  const valorTotal = roundCurrencyValue(venda.valor);
+  const custoTotal = roundCurrencyValue(venda.totalCustos);
+  if (!venda.produtoServico && !venda.descricao && !valorTotal) return [];
+  return [normalizeItem({
+    id: makeUid('item'),
+    tipo: 'Produto',
+    titulo: venda.produtoServico || 'Item unico',
+    descricao: venda.descricao || '',
+    quantidade: 1,
+    valorUnitario: valorTotal,
+    custoUnitario: custoTotal
+  })];
+}
+
+function getVendaPayments(venda = {}) {
+  const parsed = parseJsonArray(venda.pagamentosJson).map((payment, index) => normalizePayment(payment, `Parcela ${index + 1}`));
+  if (parsed.length) return parsed;
+  const total = roundCurrencyValue(venda.valor);
+  if (!total) return [];
+  const hasValorRecebido = venda.valorRecebido !== undefined && venda.valorRecebido !== null && venda.valorRecebido !== '';
+  const hasSaldoRestante = venda.saldoRestante !== undefined && venda.saldoRestante !== null && venda.saldoRestante !== '';
+  const valorRecebido = roundCurrencyValue(hasValorRecebido ? venda.valorRecebido : total);
+  const saldoRestante = roundCurrencyValue(hasSaldoRestante ? venda.saldoRestante : Math.max(total - valorRecebido, 0));
+  const payments = [];
+  if (valorRecebido > 0) {
+    payments.push(normalizePayment({
+      id: makeUid('pay'),
+      descricao: 'Recebimento principal',
+      valor: valorRecebido,
+      forma: venda.pgto || 'Pix',
+      status: 'Pago',
+      recebidoEm: venda.dataHora || nowIso()
+    }, 'Recebimento principal'));
+  }
+  if (saldoRestante > 0) {
+    payments.push(normalizePayment({
+      id: makeUid('pay'),
+      descricao: 'Saldo restante',
+      valor: saldoRestante,
+      forma: venda.pgto || 'Pix',
+      status: 'Pendente',
+      vencimento: venda.vencimento || ''
+    }, 'Saldo restante'));
+  }
+  if (!payments.length) {
+    payments.push(normalizePayment({
+      id: makeUid('pay'),
+      descricao: 'Pagamento integral',
+      valor: total,
+      forma: venda.pgto || 'Pix',
+      status: 'Pago',
+      recebidoEm: venda.dataHora || nowIso()
+    }, 'Pagamento integral'));
+  }
+  return payments;
+}
+
+function calcItemsTotals(items = [], extraCosts = 0) {
+  const normalizedItems = items.map((item, index) => normalizeItem(item, `Item ${index + 1}`));
+  const subtotal = normalizedItems.reduce((sum, item) => sum + (item.quantidade * item.valorUnitario), 0);
+  const custoItens = normalizedItems.reduce((sum, item) => sum + (item.quantidade * item.custoUnitario), 0);
+  const custoOutros = roundCurrencyValue(extraCosts);
+  const totalCustos = roundCurrencyValue(custoItens + custoOutros);
+  const valorTotal = roundCurrencyValue(subtotal);
+  const lucro = roundCurrencyValue(valorTotal - totalCustos);
+  const margem = valorTotal ? (lucro / valorTotal) * 100 : 0;
+  return {
+    items: normalizedItems,
+    subtotal: valorTotal,
+    custoItens: roundCurrencyValue(custoItens),
+    custoOutros,
+    totalCustos,
+    lucro,
+    margem
+  };
+}
+
+function calcPaymentsSummary(payments = [], totalVenda = 0) {
+  const normalizedPayments = payments.map((payment, index) => normalizePayment(payment, `Parcela ${index + 1}`))
+    .filter((payment) => payment.valor > 0);
+  const totalPlanejado = roundCurrencyValue(normalizedPayments.reduce((sum, payment) => sum + payment.valor, 0));
+  const recebido = roundCurrencyValue(normalizedPayments
+    .filter((payment) => payment.status === 'Pago')
+    .reduce((sum, payment) => sum + payment.valor, 0));
+  const saldo = roundCurrencyValue(Math.max(roundCurrencyValue(totalVenda) - recebido, 0));
+  let status = 'Pendente';
+  if (roundCurrencyValue(totalVenda) > 0 && saldo <= 0.009) {
+    status = 'Pago';
+  } else if (recebido > 0) {
+    status = 'Parcial';
+  }
+  const proximoVencimento = normalizedPayments
+    .filter((payment) => payment.status !== 'Pago' && payment.vencimento)
+    .sort((a, b) => new Date(a.vencimento).getTime() - new Date(b.vencimento).getTime())[0]?.vencimento || '';
+  return {
+    payments: normalizedPayments,
+    totalPlanejado,
+    recebido,
+    saldo,
+    status,
+    proximoVencimento
+  };
+}
+
+function summarizeItemLabel(items = [], fallback = '-') {
+  if (!items.length) return fallback;
+  const first = items[0].titulo || items[0].descricao || fallback;
+  return items.length === 1 ? first : `${first} +${items.length - 1}`;
+}
+
+function getPaymentMethodSummary(payments = [], fallback = 'Pix') {
+  const methods = Array.from(new Set(
+    payments
+      .filter((payment) => payment.status === 'Pago')
+      .map((payment) => payment.forma)
+      .filter(Boolean)
+  ));
+  if (!methods.length) {
+    return payments[0]?.forma || fallback;
+  }
+  return methods.length === 1 ? methods[0] : 'Multiplo';
+}
+
+function getVendaReferenceBase(reference) {
+  return String(reference || '').split('::')[0].trim();
+}
+
+function getVendaMetrics(venda = {}) {
+  const items = getVendaItems(venda);
+  const totals = calcItemsTotals(items);
+  const hasValor = venda.valor !== undefined && venda.valor !== null && venda.valor !== '';
+  const hasTotalCustos = venda.totalCustos !== undefined && venda.totalCustos !== null && venda.totalCustos !== '';
+  const hasMargem = venda.margem !== undefined && venda.margem !== null && venda.margem !== '';
+  const hasValorRecebido = venda.valorRecebido !== undefined && venda.valorRecebido !== null && venda.valorRecebido !== '';
+  const hasSaldoRestante = venda.saldoRestante !== undefined && venda.saldoRestante !== null && venda.saldoRestante !== '';
+  const valor = roundCurrencyValue(hasValor ? venda.valor : totals.subtotal);
+  const payments = getVendaPayments(venda);
+  const paymentSummary = calcPaymentsSummary(payments, valor);
+  const totalCustos = roundCurrencyValue(hasTotalCustos ? venda.totalCustos : totals.totalCustos);
+  const lucroCalculado = valor - totalCustos;
+  return {
+    items,
+    payments,
+    valor,
+    totalCustos,
+    lucro: roundCurrencyValue(venda.lucro !== undefined && venda.lucro !== null && venda.lucro !== '' ? venda.lucro : lucroCalculado),
+    margem: Number(hasMargem ? venda.margem : (valor ? (lucroCalculado / valor) * 100 : 0)),
+    recebido: roundCurrencyValue(hasValorRecebido ? venda.valorRecebido : paymentSummary.recebido),
+    saldoRestante: roundCurrencyValue(hasSaldoRestante ? venda.saldoRestante : paymentSummary.saldo),
+    statusRecebimento: venda.statusRecebimento || paymentSummary.status,
+    vencimento: venda.vencimento || paymentSummary.proximoVencimento || '',
+    pgtoResumo: venda.pgto || getPaymentMethodSummary(payments)
+  };
+}
+
+function getOrcamentoMetrics(orcamento = {}) {
+  const items = getOrcamentoItems(orcamento);
+  const totals = calcItemsTotals(items, orcamento.custoOutros);
+  const hasValorTotal = orcamento.valorTotal !== undefined && orcamento.valorTotal !== null && orcamento.valorTotal !== '';
+  const hasCustoOutros = orcamento.custoOutros !== undefined && orcamento.custoOutros !== null && orcamento.custoOutros !== '';
+  const hasTotalCustos = orcamento.totalCustos !== undefined && orcamento.totalCustos !== null && orcamento.totalCustos !== '';
+  const hasLucro = orcamento.lucro !== undefined && orcamento.lucro !== null && orcamento.lucro !== '';
+  const hasMargem = orcamento.margem !== undefined && orcamento.margem !== null && orcamento.margem !== '';
+  return {
+    items,
+    valor: roundCurrencyValue(hasValorTotal ? orcamento.valorTotal : totals.subtotal),
+    custoItens: totals.custoItens,
+    custoOutros: roundCurrencyValue(hasCustoOutros ? orcamento.custoOutros : totals.custoOutros),
+    totalCustos: roundCurrencyValue(hasTotalCustos ? orcamento.totalCustos : totals.totalCustos),
+    lucro: roundCurrencyValue(hasLucro ? orcamento.lucro : totals.lucro),
+    margem: Number(hasMargem ? orcamento.margem : totals.margem)
+  };
+}
+
+function buildPaymentStatusBadge(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'pago') return 'success';
+  if (normalized === 'parcial') return 'warn';
+  return 'neutral';
+}
+
+function buildItemRowHtml(item = {}, includeCost = true) {
+  const normalized = normalizeItem(item);
+  const costField = includeCost ? `
+    <label data-admin>Custo unit.
+      <input type="number" step="0.01" min="0" class="item-cost" value="${normalized.custoUnitario}" />
+    </label>
+  ` : '';
+  return `
+    <div class="builder-row item-row" data-row-id="${escapeHtml(normalized.id)}">
+      <input type="hidden" class="row-id" value="${escapeHtml(normalized.id)}" />
+      <label>Tipo
+        <select class="item-type">
+          ${ITEM_TYPES.map((type) => `<option value="${type}" ${type === normalized.tipo ? 'selected' : ''}>${type}</option>`).join('')}
+        </select>
+      </label>
+      <label>Titulo
+        <input type="text" class="item-title" value="${escapeHtml(normalized.titulo)}" placeholder="Ex: Alianca ouro 18k" />
+      </label>
+      <label>Descricao
+        <input type="text" class="item-description" value="${escapeHtml(normalized.descricao)}" placeholder="Detalhes do item" />
+      </label>
+      <label>Qtd.
+        <input type="number" step="0.01" min="0.01" class="item-quantity" value="${normalized.quantidade}" />
+      </label>
+      <label>Valor unit.
+        <input type="number" step="0.01" min="0" class="item-price" value="${normalized.valorUnitario}" />
+      </label>
+      ${costField}
+      <button type="button" class="icon-btn builder-remove-btn" data-action="remove-row" title="Remover item">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  `;
+}
+
+function buildPaymentRowHtml(payment = {}) {
+  const normalized = normalizePayment(payment);
+  return `
+    <div class="builder-row payment-row" data-row-id="${escapeHtml(normalized.id)}">
+      <input type="hidden" class="row-id" value="${escapeHtml(normalized.id)}" />
+      <label>Descricao
+        <input type="text" class="payment-description" value="${escapeHtml(normalized.descricao)}" placeholder="Ex: Sinal, saldo, parcela 2" />
+      </label>
+      <label>Valor
+        <input type="number" step="0.01" min="0" class="payment-value" value="${normalized.valor}" />
+      </label>
+      <label>Forma
+        <select class="payment-method">
+          ${PAYMENT_METHODS.map((method) => `<option value="${method}" ${method === normalized.forma ? 'selected' : ''}>${method}</option>`).join('')}
+        </select>
+      </label>
+      <label>Status
+        <select class="payment-status">
+          ${PAYMENT_STATUSES.map((status) => `<option value="${status}" ${status === normalized.status ? 'selected' : ''}>${status}</option>`).join('')}
+        </select>
+      </label>
+      <label>Vencimento
+        <input type="date" class="payment-due" value="${formatDateForInput(normalized.vencimento)}" />
+      </label>
+      <label>Recebido em
+        <input type="date" class="payment-date" value="${formatDateForInput(normalized.recebidoEm)}" />
+      </label>
+      <button type="button" class="icon-btn builder-remove-btn" data-action="remove-row" title="Remover parcela">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+  `;
+}
+
+function getBuilderList(builder) {
+  return qs('.builder-list', builder);
+}
+
+function serializeItemRows(scope) {
+  return qsa('.item-row', scope)
+    .map((row, index) => normalizeItem({
+      id: qs('.row-id', row)?.value || makeUid('item'),
+      tipo: qs('.item-type', row)?.value || 'Produto',
+      titulo: qs('.item-title', row)?.value || '',
+      descricao: qs('.item-description', row)?.value || '',
+      quantidade: qs('.item-quantity', row)?.value || 1,
+      valorUnitario: qs('.item-price', row)?.value || 0,
+      custoUnitario: qs('.item-cost', row)?.value || 0
+    }, `Item ${index + 1}`))
+    .filter((item) => item.titulo || item.descricao || item.valorUnitario || item.custoUnitario);
+}
+
+function serializePaymentRows(scope) {
+  return qsa('.payment-row', scope)
+    .map((row, index) => normalizePayment({
+      id: qs('.row-id', row)?.value || makeUid('pay'),
+      descricao: qs('.payment-description', row)?.value || `Parcela ${index + 1}`,
+      valor: qs('.payment-value', row)?.value || 0,
+      forma: qs('.payment-method', row)?.value || 'Pix',
+      status: qs('.payment-status', row)?.value || 'Pendente',
+      vencimento: toIsoFromDateInput(qs('.payment-due', row)?.value || ''),
+      recebidoEm: toIsoFromDateInput(qs('.payment-date', row)?.value || '')
+    }, `Parcela ${index + 1}`))
+    .filter((payment) => payment.valor > 0);
+}
+
+function renderItemsSummary(builder) {
+  const items = serializeItemRows(builder);
+  const form = builder.closest('form') || builder.closest('.drawer-content') || builder.parentElement;
+  const extraCostInput = qs('input[name="custoOutros"]', form);
+  const extraCosts = extraCostInput ? extraCostInput.value : 0;
+  const totals = calcItemsTotals(items, extraCosts);
+  const summary = qs('.builder-summary', builder);
+  if (!summary) return totals;
+  const chips = [
+    `<div class="summary-chip"><span>Itens</span><strong>${items.length}</strong></div>`,
+    `<div class="summary-chip"><span>Total</span><strong>${formatCurrency(totals.subtotal)}</strong></div>`
+  ];
+  if (state.perfil === 'Administrador') {
+    chips.push(`<div class="summary-chip"><span>Custos</span><strong>${formatCurrency(totals.totalCustos)}</strong></div>`);
+    chips.push(`<div class="summary-chip"><span>Lucro</span><strong>${formatCurrency(totals.lucro)}</strong></div>`);
+    chips.push(`<div class="summary-chip"><span>Margem</span><strong>${formatPercent(totals.margem)}</strong></div>`);
+  }
+  summary.innerHTML = chips.join('');
+  return totals;
+}
+
+function renderPaymentsSummary(builder) {
+  const form = builder.closest('form') || builder.closest('.drawer-content') || builder.parentElement;
+  const itemBuilder = qs('.items-builder[data-builder-kind="venda"]', form);
+  const itemTotals = itemBuilder ? calcItemsTotals(serializeItemRows(itemBuilder)) : { subtotal: 0 };
+  const payments = serializePaymentRows(builder);
+  const summaryData = calcPaymentsSummary(payments, itemTotals.subtotal);
+  const summary = qs('.builder-summary', builder);
+  if (!summary) return summaryData;
+  summary.innerHTML = `
+    <div class="summary-chip"><span>Total da venda</span><strong>${formatCurrency(itemTotals.subtotal)}</strong></div>
+    <div class="summary-chip"><span>Planejado</span><strong>${formatCurrency(summaryData.totalPlanejado)}</strong></div>
+    <div class="summary-chip"><span>Recebido</span><strong>${formatCurrency(summaryData.recebido)}</strong></div>
+    <div class="summary-chip"><span>Saldo</span><strong>${formatCurrency(summaryData.saldo)}</strong></div>
+    <div class="summary-chip"><span>Status</span><strong>${summaryData.status}</strong></div>
+  `;
+  return summaryData;
+}
+
+function initItemsBuilder(builder) {
+  if (!builder || builder.dataset.ready === '1') return;
+  const list = getBuilderList(builder);
+  if (list && !list.children.length) {
+    list.insertAdjacentHTML('beforeend', buildItemRowHtml());
+  }
+  builder.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'add-item') {
+      list.insertAdjacentHTML('beforeend', buildItemRowHtml());
+      applyRoleAccess();
+      renderItemsSummary(builder);
+      renderPaymentsSummary(qs('.payments-builder[data-builder-kind="venda"]', builder.closest('form') || builder.closest('.drawer-content') || document));
+    }
+    if (action === 'remove-row') {
+      const row = event.target.closest('.item-row');
+      if (!row) return;
+      const rows = qsa('.item-row', builder);
+      if (rows.length === 1) {
+        qsa('input', row).forEach((input) => { input.value = input.type === 'number' ? '0' : ''; });
+        const qtyInput = qs('.item-quantity', row);
+        if (qtyInput) qtyInput.value = '1';
+        const typeSelect = qs('.item-type', row);
+        if (typeSelect) typeSelect.value = 'Produto';
+      } else {
+        row.remove();
+      }
+      renderItemsSummary(builder);
+      renderPaymentsSummary(qs('.payments-builder[data-builder-kind="venda"]', builder.closest('form') || builder.closest('.drawer-content') || document));
+    }
+  });
+  builder.addEventListener('input', () => {
+    renderItemsSummary(builder);
+    renderPaymentsSummary(qs('.payments-builder[data-builder-kind="venda"]', builder.closest('form') || builder.closest('.drawer-content') || document));
+  });
+  builder.dataset.ready = '1';
+  applyRoleAccess();
+  renderItemsSummary(builder);
+}
+
+function initPaymentsBuilder(builder) {
+  if (!builder || builder.dataset.ready === '1') return;
+  const list = getBuilderList(builder);
+  if (list && !list.children.length) {
+    list.insertAdjacentHTML('beforeend', buildPaymentRowHtml({ status: 'Pago', descricao: 'Pagamento inicial' }));
+  }
+  builder.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'add-payment') {
+      list.insertAdjacentHTML('beforeend', buildPaymentRowHtml());
+      renderPaymentsSummary(builder);
+      return;
+    }
+    if (action === 'fill-balance') {
+      const form = builder.closest('form') || builder.closest('.drawer-content') || builder.parentElement;
+      const itemBuilder = qs('.items-builder[data-builder-kind="venda"]', form);
+      const itemTotals = itemBuilder ? calcItemsTotals(serializeItemRows(itemBuilder)) : { subtotal: 0 };
+      const currentSummary = calcPaymentsSummary(serializePaymentRows(builder), itemTotals.subtotal);
+      const remaining = roundCurrencyValue(itemTotals.subtotal - currentSummary.totalPlanejado);
+      if (remaining <= 0) {
+        showToast('As parcelas ja cobrem o valor total da venda.', 'error');
+        return;
+      }
+      list.insertAdjacentHTML('beforeend', buildPaymentRowHtml({
+        descricao: 'Saldo restante',
+        valor: remaining,
+        forma: 'Pix',
+        status: 'Pendente'
+      }));
+      renderPaymentsSummary(builder);
+      return;
+    }
+    if (action === 'remove-row') {
+      const row = event.target.closest('.payment-row');
+      if (!row) return;
+      const rows = qsa('.payment-row', builder);
+      if (rows.length === 1) {
+        qsa('input', row).forEach((input) => { input.value = input.type === 'number' ? '0' : ''; });
+        const method = qs('.payment-method', row);
+        if (method) method.value = 'Pix';
+        const status = qs('.payment-status', row);
+        if (status) status.value = 'Pago';
+      } else {
+        row.remove();
+      }
+      renderPaymentsSummary(builder);
+    }
+  });
+  builder.addEventListener('input', () => renderPaymentsSummary(builder));
+  builder.dataset.ready = '1';
+  renderPaymentsSummary(builder);
+}
+
+function initStructuredBuilders(scope = document) {
+  qsa('.items-builder', scope).forEach(initItemsBuilder);
+  qsa('.payments-builder', scope).forEach(initPaymentsBuilder);
+}
+
+function injectBuilderRows(builder, rowsHtml = []) {
+  const list = getBuilderList(builder);
+  if (!list) return;
+  list.innerHTML = rowsHtml.join('') || '';
+}
+
+function buildItensTableHtml(items = [], totalLabel = 'Total') {
+  if (!items.length) {
+    return `
+      <table class="doc-table">
+        <tbody><tr><td colspan="5">Sem itens informados</td></tr></tbody>
+      </table>
+    `;
+  }
+  const rows = items.map((item) => {
+    const subtotal = roundCurrencyValue(item.quantidade * item.valorUnitario);
+    return `
+      <tr>
+        <td>${escapeHtml(item.tipo)}</td>
+        <td>${escapeHtml(item.titulo || '-')}</td>
+        <td>${escapeHtml(item.descricao || '-')}</td>
+        <td>${item.quantidade}</td>
+        <td>${formatCurrency(subtotal)}</td>
+      </tr>
+    `;
+  }).join('');
+  return `
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Item</th>
+          <th>Descricao</th>
+          <th>Qtd.</th>
+          <th>${totalLabel}</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function buildPagamentosTableHtml(payments = []) {
+  if (!payments.length) return '<p>-</p>';
+  return `
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>Descricao</th>
+          <th>Forma</th>
+          <th>Status</th>
+          <th>Data</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${payments.map((payment) => `
+          <tr>
+            <td>${escapeHtml(payment.descricao || '-')}</td>
+            <td>${escapeHtml(payment.forma || '-')}</td>
+            <td>${escapeHtml(payment.status || '-')}</td>
+            <td>${formatDateShort(payment.status === 'Pago' ? payment.recebidoEm : payment.vencimento)}</td>
+            <td>${formatCurrency(payment.valor)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildDescriptionSummary(items = []) {
+  return items
+    .map((item) => item.descricao || item.titulo || '')
+    .filter(Boolean)
+    .join(' | ')
+    .slice(0, 500);
+}
+
+function ensurePaidDates(payments = []) {
+  return payments.map((payment) => {
+    if (payment.status === 'Pago') {
+      return {
+        ...payment,
+        recebidoEm: payment.recebidoEm || nowIso(),
+        vencimento: payment.vencimento || payment.recebidoEm || nowIso()
+      };
+    }
+    return payment;
+  });
+}
+
+function validateItems(items = []) {
+  if (!items.length) {
+    throw new Error('Adicione ao menos um item.');
+  }
+  const invalid = items.find((item) => !item.titulo || item.valorUnitario < 0 || item.quantidade <= 0);
+  if (invalid) {
+    throw new Error('Revise os itens: titulo, quantidade e valor unitario sao obrigatorios.');
+  }
+}
+
+function validatePayments(payments = [], totalVenda = 0) {
+  if (!payments.length) {
+    throw new Error('Adicione ao menos um recebimento ou parcela.');
+  }
+  const invalid = payments.find((payment) => payment.valor <= 0 || !payment.descricao);
+  if (invalid) {
+    throw new Error('Cada parcela precisa de descricao e valor maior que zero.');
+  }
+  const pendingWithoutDue = payments.find((payment) => payment.status !== 'Pago' && !payment.vencimento);
+  if (pendingWithoutDue) {
+    throw new Error('Toda parcela pendente precisa ter vencimento.');
+  }
+  const totalPlanejado = roundCurrencyValue(payments.reduce((sum, payment) => sum + payment.valor, 0));
+  const totalComparado = roundCurrencyValue(totalVenda);
+  if (Math.abs(totalPlanejado - totalComparado) > 0.01) {
+    throw new Error('A soma das parcelas precisa bater exatamente com o total da venda.');
+  }
+}
+
+function buildItemsBuilderBlockHtml(kind, title, subtitle) {
+  return `
+    <div class="builder-card items-builder full" data-builder-kind="${kind}">
+      <div class="builder-head">
+        <div>
+          <h5>${title}</h5>
+          <p class="muted">${subtitle}</p>
+        </div>
+        <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+          <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+        </button>
+      </div>
+      <div class="builder-list"></div>
+      <div class="builder-summary"></div>
+    </div>
+  `;
+}
+
+function buildPaymentsBuilderBlockHtml() {
+  return `
+    <div class="builder-card payments-builder full" data-builder-kind="venda">
+      <div class="builder-head">
+        <div>
+          <h5>Recebimentos e saldo</h5>
+          <p class="muted">Registre sinal, parcelas pendentes e valores recebidos.</p>
+        </div>
+        <div class="builder-head-actions">
+          <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-payment">
+            <i class="fa-solid fa-plus"></i><span>Adicionar parcela</span>
+          </button>
+          <button type="button" class="btn btn-ghost builder-balance-btn" data-action="fill-balance">
+            <i class="fa-solid fa-scale-balanced"></i><span>Completar saldo</span>
+          </button>
+        </div>
+      </div>
+      <div class="builder-list"></div>
+      <div class="builder-summary"></div>
+    </div>
+  `;
+}
+
+function buildOrcamentoFormHtml(orcamento = {}) {
+  return `
+    <h3>${orcamento.numero ? `Editar Orcamento #${orcamento.numero}` : 'Converter em venda'}</h3>
+    <form id="orcamento-edit-form" class="form-grid">
+      <label>Cliente<input type="text" name="cliente" value="${escapeHtml(orcamento.cliente || '')}" readonly /></label>
+      <label>Validade<input type="date" name="validade" value="${escapeHtml(orcamento.validade || '')}" /></label>
+      <label>Status
+        <select name="status">
+          <option value="Em negociacao">Em negociacao</option>
+          <option value="Enviado">Enviado</option>
+          <option value="Aprovado">Aprovado</option>
+          <option value="Perdido">Perdido</option>
+          <option value="Confirmado">Confirmado</option>
+        </select>
+      </label>
+      <label>Observacao publica<input type="text" name="obsPublic" value="${escapeHtml(orcamento.obsPublic || '')}" /></label>
+      <label>Observacao interna<input type="text" name="obsPrivate" value="${escapeHtml(orcamento.obsPrivate || '')}" /></label>
+      <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="${roundCurrencyValue(orcamento.custoOutros)}" /></label>
+      ${buildItemsBuilderBlockHtml('orcamento', 'Itens do orcamento', 'Edite os itens, quantidades e valores do documento.')}
+      <button class="btn btn-primary" type="submit">Atualizar</button>
+    </form>
+  `;
+}
+
+function buildVendaComposerHtml(venda = {}, heading = 'Editar venda') {
+  return `
+    <h3>${heading}</h3>
+    <form id="venda-edit-form" class="form-grid">
+      <label>Cliente<input type="text" name="cliente" value="${escapeHtml(venda.cliente || '')}" readonly /></label>
+      <label class="full">Observacoes<input type="text" name="obs" value="${escapeHtml(venda.obs || '')}" /></label>
+      ${buildItemsBuilderBlockHtml('venda', 'Itens da venda', 'Monte os itens vendidos e seus valores unitarios.')}
+      ${buildPaymentsBuilderBlockHtml()}
+      <button class="btn btn-primary" type="submit">Salvar venda</button>
+    </form>
+  `;
+}
+
+function fillBuilderWithRows(scope, selector, rowsHtml) {
+  const builder = qs(selector, scope);
+  if (!builder) return null;
+  injectBuilderRows(builder, rowsHtml);
+  initStructuredBuilders(scope);
+  return builder;
+}
+
+function resetItemsBuilder(builder) {
+  if (!builder) return;
+  injectBuilderRows(builder, [buildItemRowHtml()]);
+  renderItemsSummary(builder);
+}
+
+function resetPaymentsBuilder(builder) {
+  if (!builder) return;
+  injectBuilderRows(builder, [buildPaymentRowHtml({ descricao: 'Pagamento inicial', status: 'Pago' })]);
+  renderPaymentsSummary(builder);
+}
+
+function buildOrcamentoPayloadFromScope(scope, base = {}) {
+  const itemsBuilder = qs('.items-builder[data-builder-kind="orcamento"]', scope) || qs('.items-builder', scope);
+  const items = serializeItemRows(itemsBuilder);
+  validateItems(items);
+  const extraCosts = qs('input[name="custoOutros"]', scope)?.value || 0;
+  const totals = calcItemsTotals(items, extraCosts);
+  return {
+    ...base,
+    cliente: qs('[name="cliente"]', scope)?.value || base.cliente || '',
+    produtoServico: summarizeItemLabel(items, base.produtoServico || 'Itens do orcamento'),
+    descricao: buildDescriptionSummary(items),
+    validade: qs('[name="validade"]', scope)?.value || '',
+    obsPublic: qs('[name="obsPublic"]', scope)?.value || '',
+    obsPrivate: qs('[name="obsPrivate"]', scope)?.value || '',
+    custoMaterial: totals.custoItens,
+    custoOutros: totals.custoOutros,
+    totalCustos: totals.totalCustos,
+    lucro: totals.lucro,
+    margem: totals.margem,
+    valorTotal: totals.subtotal,
+    itensJson: JSON.stringify(items),
+    status: qs('[name="status"]', scope)?.value || 'Em negociacao'
+  };
+}
+
+function buildVendaPayloadFromScope(scope, base = {}) {
+  const itemsBuilder = qs('.items-builder[data-builder-kind="venda"]', scope) || qs('.items-builder', scope);
+  const paymentsBuilder = qs('.payments-builder[data-builder-kind="venda"]', scope) || qs('.payments-builder', scope);
+  const items = serializeItemRows(itemsBuilder);
+  validateItems(items);
+  const itemTotals = calcItemsTotals(items);
+  const payments = ensurePaidDates(serializePaymentRows(paymentsBuilder));
+  validatePayments(payments, itemTotals.subtotal);
+  const paymentSummary = calcPaymentsSummary(payments, itemTotals.subtotal);
+  return {
+    ...base,
+    cliente: qs('[name="cliente"]', scope)?.value || base.cliente || '',
+    produtoServico: summarizeItemLabel(items, base.produtoServico || 'Itens da venda'),
+    descricao: buildDescriptionSummary(items),
+    valor: itemTotals.subtotal,
+    valorRecebido: paymentSummary.recebido,
+    saldoRestante: paymentSummary.saldo,
+    statusRecebimento: paymentSummary.status,
+    vencimento: paymentSummary.proximoVencimento,
+    totalCustos: itemTotals.totalCustos,
+    lucro: itemTotals.lucro,
+    margem: itemTotals.margem,
+    pgto: getPaymentMethodSummary(payments),
+    itensJson: JSON.stringify(items),
+    pagamentosJson: JSON.stringify(payments),
+    obs: qs('[name="obs"]', scope)?.value || ''
+  };
+}
+
+function mountStructuredForms() {
+  if (dom.orcamentoForm && !qs('.items-builder', dom.orcamentoForm)) {
+    const submitButton = qs('button[type="submit"]', dom.orcamentoForm);
+    if (submitButton) {
+      submitButton.insertAdjacentHTML('beforebegin', `
+        <div class="builder-card items-builder full" data-builder-kind="orcamento">
+          <div class="builder-head">
+            <div>
+              <h5>Itens do orcamento</h5>
+              <p class="muted">Adicione produtos, servicos ou combinacoes no mesmo documento.</p>
+            </div>
+            <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+              <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+            </button>
+          </div>
+          <div class="builder-list" id="orcamento-items"></div>
+          <div class="builder-summary" id="orcamento-summary"></div>
+        </div>
+      `);
+    }
+  }
+
+  if (dom.vendaForm && !qs('.items-builder', dom.vendaForm)) {
+    qsa('input[name="produtoServico"], input[name="descricao"], input[name="valor"], input[name="totalCustos"], select[name="pgto"]', dom.vendaForm)
+      .forEach((field) => {
+        const label = field.closest('label');
+        if (label) label.remove();
+      });
+    const submitButton = qs('button[type="submit"]', dom.vendaForm);
+    if (submitButton) {
+      submitButton.insertAdjacentHTML('beforebegin', `
+        <div class="builder-card items-builder full" data-builder-kind="venda">
+          <div class="builder-head">
+            <div>
+              <h5>Itens da venda</h5>
+              <p class="muted">Monte a venda com quantos itens forem necessarios.</p>
+            </div>
+            <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+              <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+            </button>
+          </div>
+          <div class="builder-list" id="venda-items"></div>
+          <div class="builder-summary" id="venda-items-summary"></div>
+        </div>
+        <div class="builder-card payments-builder full" data-builder-kind="venda">
+          <div class="builder-head">
+            <div>
+              <h5>Recebimentos e saldo</h5>
+              <p class="muted">Registre sinal, pagamentos recebidos e saldo pendente.</p>
+            </div>
+            <div class="builder-head-actions">
+              <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-payment">
+                <i class="fa-solid fa-plus"></i><span>Adicionar parcela</span>
+              </button>
+              <button type="button" class="btn btn-ghost builder-balance-btn" data-action="fill-balance">
+                <i class="fa-solid fa-scale-balanced"></i><span>Completar saldo</span>
+              </button>
+            </div>
+          </div>
+          <div class="builder-list" id="venda-payments"></div>
+          <div class="builder-summary" id="venda-payments-summary"></div>
+        </div>
+      `);
+    }
+  }
+
+  const orcamentoHeader = qs('#orcamento-table thead tr');
+  if (orcamentoHeader) {
+    orcamentoHeader.innerHTML = `
+      <th>Numero</th>
+      <th>Data</th>
+      <th>Cliente</th>
+      <th>Itens</th>
+      <th>Valor</th>
+      <th>Lucro</th>
+      <th>Status</th>
+      <th>Acoes</th>
+    `;
+  }
+
+  const vendaHeader = qs('#venda-table thead tr');
+  if (vendaHeader) {
+    vendaHeader.innerHTML = `
+      <th>Numero</th>
+      <th>Data</th>
+      <th>Cliente</th>
+      <th>Itens</th>
+      <th>Valor</th>
+      <th>Recebido</th>
+      <th>Saldo</th>
+      <th>Status</th>
+      <th>Acoes</th>
+    `;
+  }
+
+  initStructuredBuilders(document);
 }
 function getSession() {
   const raw = localStorage.getItem(STORAGE_KEYS.session);
@@ -650,16 +1539,20 @@ function renderClienteOptions() {
 function renderOrcamentos() {
   const search = dom.orcamentoSearch.value?.toLowerCase() || '';
   const rows = state.data.orcamentos.filter((orcamento) => {
+    const metrics = getOrcamentoMetrics(orcamento);
+    const itemLabel = summarizeItemLabel(metrics.items, orcamento.produtoServico || '-');
     if (!search) return true;
     return (
       String(orcamento.cliente).toLowerCase().includes(search) ||
-      String(orcamento.status).toLowerCase().includes(search)
+      String(orcamento.status).toLowerCase().includes(search) ||
+      String(itemLabel).toLowerCase().includes(search)
     );
   });
 
   dom.orcamentoTable.innerHTML = rows
     .map((orcamento) => {
-      const valor = parseNumber(orcamento.totalCustos) + parseNumber(orcamento.lucro);
+      const metrics = getOrcamentoMetrics(orcamento);
+      const itemLabel = summarizeItemLabel(metrics.items, orcamento.produtoServico || '-');
       const statusMap = {
         Aprovado: 'success',
         Confirmado: 'success',
@@ -676,9 +1569,9 @@ function renderOrcamentos() {
           <td data-label="Numero">${orcamento.numero || '-'}</td>
           <td data-label="Data">${formatDateShort(orcamento.dataHora)}</td>
           <td data-label="Cliente">${orcamento.cliente || '-'}</td>
-          <td data-label="Produto/Servico">${orcamento.produtoServico || '-'}</td>
-          <td data-label="Valor">${formatCurrency(valor)}</td>
-          <td data-label="Lucro">${formatCurrency(orcamento.lucro || 0)}</td>
+          <td data-label="Itens">${itemLabel}</td>
+          <td data-label="Valor">${formatCurrency(metrics.valor)}</td>
+          <td data-label="Lucro">${formatCurrency(metrics.lucro)}</td>
           <td data-label="Status"><span class="badge ${statusClass}">${orcamento.status || 'Em negociacao'}</span></td>
           <td data-label="Acoes">
             <div class="actions">
@@ -699,24 +1592,32 @@ function renderOrcamentos() {
 function renderVendas() {
   const search = dom.vendaSearch.value?.toLowerCase() || '';
   const rows = state.data.vendas.filter((venda) => {
+    const metrics = getVendaMetrics(venda);
+    const itemLabel = summarizeItemLabel(metrics.items, venda.produtoServico || '-');
     if (!search) return true;
     return (
       String(venda.cliente).toLowerCase().includes(search) ||
-      String(venda.pgto).toLowerCase().includes(search)
+      String(metrics.statusRecebimento).toLowerCase().includes(search) ||
+      String(metrics.pgtoResumo).toLowerCase().includes(search) ||
+      String(itemLabel).toLowerCase().includes(search)
     );
   });
 
   dom.vendaTable.innerHTML = rows
     .map((venda) => {
+      const metrics = getVendaMetrics(venda);
+      const itemLabel = summarizeItemLabel(metrics.items, venda.produtoServico || '-');
+      const statusClass = buildPaymentStatusBadge(metrics.statusRecebimento);
       return `
         <tr>
           <td data-label="Numero">${venda.numero || '-'}</td>
           <td data-label="Data">${formatDateShort(venda.dataHora)}</td>
           <td data-label="Cliente">${venda.cliente || '-'}</td>
-          <td data-label="Produto/Servico">${venda.produtoServico || '-'}</td>
-          <td data-label="Valor">${formatCurrency(venda.valor || 0)}</td>
-          <td data-label="Lucro">${formatCurrency(venda.lucro || 0)}</td>
-          <td data-label="Pagamento">${venda.pgto || '-'}</td>
+          <td data-label="Itens">${itemLabel}</td>
+          <td data-label="Valor">${formatCurrency(metrics.valor)}</td>
+          <td data-label="Recebido">${formatCurrency(metrics.recebido)}</td>
+          <td data-label="Saldo">${formatCurrency(metrics.saldoRestante)}</td>
+          <td data-label="Status"><span class="badge ${statusClass}">${metrics.statusRecebimento}</span></td>
           <td data-label="Acoes">
             <div class="actions">
               <button class="btn btn-ghost action-btn" data-action="nota" data-id="${venda.rowIndex}" title="Ver nota"><i class="fa-solid fa-receipt"></i></button>
@@ -950,26 +1851,40 @@ function renderDashboard() {
   const despesasAtual = saidasAtual;
   const despesasAnterior = saidasAnterior;
 
-  const vendasPagasRefsAtual = new Set(
-    financeiroAtualPago
-      .filter((item) => String(item.origem || '').toLowerCase() === 'venda')
-      .map((item) => String(item.referencia || '').trim())
-      .filter(Boolean)
-  );
-  const vendasPagasRefsAnterior = new Set(
-    financeiroAnteriorPago
-      .filter((item) => String(item.origem || '').toLowerCase() === 'venda')
-      .map((item) => String(item.referencia || '').trim())
-      .filter(Boolean)
-  );
-  const vendasAtualContabilizadas = vendasAtual.filter((item) => vendasPagasRefsAtual.has(String(item.numero || '').trim()));
-  const vendasAnteriorContabilizadas = vendasAnterior.filter((item) => vendasPagasRefsAnterior.has(String(item.numero || '').trim()));
+  const recebimentosVendaAtual = financeiroAtualPago.filter((item) => String(item.origem || '').toLowerCase() === 'venda');
+  const recebimentosVendaAnterior = financeiroAnteriorPago.filter((item) => String(item.origem || '').toLowerCase() === 'venda');
+  const recebidoPorVendaAtual = recebimentosVendaAtual.reduce((acc, item) => {
+    const key = getVendaReferenceBase(item.referencia);
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + parseNumber(item.valor);
+    return acc;
+  }, {});
+  const recebidoPorVendaAnterior = recebimentosVendaAnterior.reduce((acc, item) => {
+    const key = getVendaReferenceBase(item.referencia);
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + parseNumber(item.valor);
+    return acc;
+  }, {});
+  const vendasAtualContabilizadas = vendasAtual.filter((item) => (recebidoPorVendaAtual[String(item.numero || '').trim()] || 0) > 0);
+  const vendasAnteriorContabilizadas = vendasAnterior.filter((item) => (recebidoPorVendaAnterior[String(item.numero || '').trim()] || 0) > 0);
 
-  const receitaOperacionalAtual = vendasAtualContabilizadas.reduce((sum, item) => sum + parseNumber(item.valor), 0);
-  const receitaOperacionalAnterior = vendasAnteriorContabilizadas.reduce((sum, item) => sum + parseNumber(item.valor), 0);
-  const custosAtual = vendasAtualContabilizadas.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
-  const custosAnterior = vendasAnteriorContabilizadas.reduce((sum, item) => sum + parseNumber(item.totalCustos), 0);
-  const lucroAtual = vendasAtualContabilizadas.reduce((sum, item) => sum + parseNumber(item.lucro), 0);
+  const receitaOperacionalAtual = roundCurrencyValue(recebimentosVendaAtual.reduce((sum, item) => sum + parseNumber(item.valor), 0));
+  const receitaOperacionalAnterior = roundCurrencyValue(recebimentosVendaAnterior.reduce((sum, item) => sum + parseNumber(item.valor), 0));
+  const custosAtual = roundCurrencyValue(vendasAtualContabilizadas.reduce((sum, item) => {
+    const numero = String(item.numero || '').trim();
+    const valorVenda = parseNumber(item.valor);
+    const recebido = recebidoPorVendaAtual[numero] || 0;
+    const fator = valorVenda > 0 ? Math.min(recebido / valorVenda, 1) : 0;
+    return sum + (parseNumber(item.totalCustos) * fator);
+  }, 0));
+  const custosAnterior = roundCurrencyValue(vendasAnteriorContabilizadas.reduce((sum, item) => {
+    const numero = String(item.numero || '').trim();
+    const valorVenda = parseNumber(item.valor);
+    const recebido = recebidoPorVendaAnterior[numero] || 0;
+    const fator = valorVenda > 0 ? Math.min(recebido / valorVenda, 1) : 0;
+    return sum + (parseNumber(item.totalCustos) * fator);
+  }, 0));
+  const lucroAtual = roundCurrencyValue(receitaOperacionalAtual - custosAtual);
 
   const resultadoOperacionalAtual = receitaOperacionalAtual - custosAtual - despesasAtual;
   const resultadoOperacionalAnterior = receitaOperacionalAnterior - custosAnterior - despesasAnterior;
@@ -1031,7 +1946,7 @@ function renderDashboard() {
     vendasAtual: vendasAtualContabilizadas,
     orcamentosAtual
   });
-  renderTopClientes(vendasAtualContabilizadas);
+  renderTopClientes(vendasAtualContabilizadas, recebidoPorVendaAtual);
   renderFinanceiroResumo(financeiroAtualPago);
 }
 
@@ -1319,10 +2234,11 @@ function getChartGridColor() {
     : 'rgba(255, 255, 255, 0.08)';
 }
 
-function renderTopClientes(vendasBase = state.data.vendas) {
+function renderTopClientes(vendasBase = state.data.vendas, recebidoPorVenda = {}) {
   const ranking = (vendasBase || []).reduce((acc, venda) => {
     const key = venda.cliente || 'Sem cliente';
-    acc[key] = (acc[key] || 0) + parseNumber(venda.valor);
+    const total = recebidoPorVenda[String(venda.numero || '').trim()] || parseNumber(venda.valor);
+    acc[key] = (acc[key] || 0) + total;
     return acc;
   }, {});
 
@@ -1382,7 +2298,7 @@ function closeModal() {
 }
 
 function buildOrcamentoDoc(orcamento) {
-  const valor = parseNumber(orcamento.totalCustos) + parseNumber(orcamento.lucro);
+  const metrics = getOrcamentoMetrics(orcamento);
   return `
     <div class="doc">
       <header class="doc-header">
@@ -1406,27 +2322,12 @@ function buildOrcamentoDoc(orcamento) {
       </div>
       <section class="doc-section">
         <h4>Itens</h4>
-        <table class="doc-table">
-          <thead>
-            <tr>
-              <th>Produto/Servico</th>
-              <th>Descricao</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>${orcamento.produtoServico || '-'}</td>
-              <td>${orcamento.descricao || '-'}</td>
-              <td>${formatCurrency(valor)}</td>
-            </tr>
-          </tbody>
-        </table>
+        ${buildItensTableHtml(metrics.items)}
       </section>
       <div class="doc-total">
         <div class="total-box">
           <span>Total do orcamento</span>
-          <strong>${formatCurrency(valor)}</strong>
+          <strong>${formatCurrency(metrics.valor)}</strong>
         </div>
       </div>
       <section class="doc-section">
@@ -1441,6 +2342,7 @@ function buildOrcamentoDoc(orcamento) {
 }
 
 function buildVendaDoc(venda, thermal = false) {
+  const metrics = getVendaMetrics(venda);
   return `
     <div class="doc ${thermal ? 'thermal' : ''}">
       <header class="doc-header">
@@ -1459,32 +2361,23 @@ function buildVendaDoc(venda, thermal = false) {
       <div class="doc-meta">
         <div><span>Cliente</span><strong>${venda.cliente || '-'}</strong></div>
         <div><span>Data</span><strong>${formatDateShort(venda.dataHora)}</strong></div>
-        <div><span>Pagamento</span><strong>${venda.pgto || '-'}</strong></div>
-        <div><span>Valor</span><strong>${formatCurrency(venda.valor || 0)}</strong></div>
+        <div><span>Pagamento</span><strong>${metrics.pgtoResumo || '-'}</strong></div>
+        <div><span>Status</span><strong>${metrics.statusRecebimento}</strong></div>
+        <div><span>Valor</span><strong>${formatCurrency(metrics.valor)}</strong></div>
+        <div><span>Recebido</span><strong>${formatCurrency(metrics.recebido)}</strong></div>
       </div>
       <section class="doc-section">
         <h4>Itens</h4>
-        <table class="doc-table">
-          <thead>
-            <tr>
-              <th>Produto/Servico</th>
-              <th>Descricao</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>${venda.produtoServico || '-'}</td>
-              <td>${venda.descricao || '-'}</td>
-              <td>${formatCurrency(venda.valor || 0)}</td>
-            </tr>
-          </tbody>
-        </table>
+        ${buildItensTableHtml(metrics.items)}
+      </section>
+      <section class="doc-section">
+        <h4>Recebimentos</h4>
+        ${buildPagamentosTableHtml(metrics.payments)}
       </section>
       <div class="doc-total">
         <div class="total-box">
           <span>Total da venda</span>
-          <strong>${formatCurrency(venda.valor || 0)}</strong>
+          <strong>${formatCurrency(metrics.valor)}</strong>
         </div>
       </div>
       <section class="doc-section">
@@ -1950,6 +2843,126 @@ async function handleVendaSubmit(event) {
   }
 }
 
+function openOrcamentoEditor(orcamento) {
+  const metrics = getOrcamentoMetrics(orcamento);
+  openDrawer(buildOrcamentoFormHtml(orcamento));
+  const form = qs('#orcamento-edit-form');
+  fillBuilderWithRows(form, '.items-builder[data-builder-kind="orcamento"]', metrics.items.map((item) => buildItemRowHtml(item)));
+  form.querySelector('select[name="status"]').value = orcamento.status || 'Em negociacao';
+  renderItemsSummary(qs('.items-builder', form));
+  applyRoleAccess();
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const updated = buildOrcamentoPayloadFromScope(form, { ...orcamento });
+      await apiRequest('updateOrcamento', updated);
+      closeDrawer();
+      await loadAllData();
+      showToast('Orcamento atualizado.');
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar orcamento', 'error');
+    }
+  });
+}
+
+async function confirmVendaFromOrcamento(orcamento) {
+  const metrics = getOrcamentoMetrics(orcamento);
+  openDrawer(buildVendaComposerHtml({
+    cliente: orcamento.cliente,
+    obs: orcamento.obsPublic
+  }, `Converter Orcamento #${orcamento.numero} em venda`));
+  const form = qs('#venda-edit-form');
+  fillBuilderWithRows(form, '.items-builder[data-builder-kind="venda"]', metrics.items.map((item) => buildItemRowHtml(item)));
+  fillBuilderWithRows(form, '.payments-builder[data-builder-kind="venda"]', [buildPaymentRowHtml({
+    descricao: 'Saldo da venda',
+    valor: metrics.valor,
+    forma: 'Pix',
+    status: 'Pendente',
+    vencimento: nowIso()
+  })]);
+  renderItemsSummary(qs('.items-builder', form));
+  renderPaymentsSummary(qs('.payments-builder', form));
+  applyRoleAccess();
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const payload = buildVendaPayloadFromScope(form, {
+        dataHora: nowIso(),
+        cliente: orcamento.cliente,
+        obs: orcamento.obsPublic
+      });
+      await apiRequest('createVenda', payload);
+      await apiRequest('updateOrcamento', { ...orcamento, status: 'Confirmado' });
+      closeDrawer();
+      await loadAllData();
+      showToast('Venda criada e orcamento confirmado.');
+    } catch (error) {
+      showToast(error.message || 'Erro ao confirmar venda', 'error');
+    }
+  });
+}
+
+function openVendaEditor(venda) {
+  const metrics = getVendaMetrics(venda);
+  openDrawer(buildVendaComposerHtml(venda, `Editar venda #${venda.numero}`));
+  const form = qs('#venda-edit-form');
+  fillBuilderWithRows(form, '.items-builder[data-builder-kind="venda"]', metrics.items.map((item) => buildItemRowHtml(item)));
+  fillBuilderWithRows(form, '.payments-builder[data-builder-kind="venda"]', metrics.payments.map((payment) => buildPaymentRowHtml(payment)));
+  renderItemsSummary(qs('.items-builder', form));
+  renderPaymentsSummary(qs('.payments-builder', form));
+  applyRoleAccess();
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      const updated = buildVendaPayloadFromScope(form, { ...venda });
+      await apiRequest('updateVenda', updated);
+      closeDrawer();
+      await loadAllData();
+      showToast('Venda atualizada.');
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar venda', 'error');
+    }
+  });
+}
+
+async function handleOrcamentoSubmit(event) {
+  event.preventDefault();
+  try {
+    const payload = buildOrcamentoPayloadFromScope(event.target, { dataHora: nowIso() });
+    const orcamento = await apiRequest('createOrcamento', payload);
+    state.data.orcamentos.unshift(orcamento);
+    event.target.reset();
+    resetItemsBuilder(qs('.items-builder[data-builder-kind="orcamento"]', dom.orcamentoForm));
+    const extraCostInput = qs('input[name="custoOutros"]', dom.orcamentoForm);
+    if (extraCostInput) extraCostInput.value = '0';
+    renderItemsSummary(qs('.items-builder[data-builder-kind="orcamento"]', dom.orcamentoForm));
+    renderAll();
+    showToast('Orcamento salvo.');
+  } catch (error) {
+    showToast(error.message || 'Erro ao salvar orcamento', 'error');
+  }
+}
+
+async function handleVendaSubmit(event) {
+  event.preventDefault();
+  try {
+    const payload = buildVendaPayloadFromScope(event.target, { dataHora: nowIso() });
+    await apiRequest('createVenda', payload);
+    event.target.reset();
+    resetItemsBuilder(qs('.items-builder[data-builder-kind="venda"]', dom.vendaForm));
+    resetPaymentsBuilder(qs('.payments-builder[data-builder-kind="venda"]', dom.vendaForm));
+    renderItemsSummary(qs('.items-builder[data-builder-kind="venda"]', dom.vendaForm));
+    renderPaymentsSummary(qs('.payments-builder[data-builder-kind="venda"]', dom.vendaForm));
+    await loadAllData();
+    showToast('Venda registrada.');
+  } catch (error) {
+    showToast(error.message || 'Erro ao salvar venda', 'error');
+  }
+}
+
 function defaultCategoryByTipo(tipo) {
   return String(tipo || '').toLowerCase() === 'saida' ? 'Compra de material' : 'Aporte';
 }
@@ -1969,7 +2982,7 @@ function isPaidStatus(status) {
 }
 
 function isFinancePaid(item) {
-  return isPaidStatus(item?.status);
+  return isPaidStatus(getFinanceStatus(item));
 }
 
 function toDateTimeLocalValue(value) {
@@ -2135,7 +3148,7 @@ async function handleLembretesActions(event) {
   if (action === 'mark-paid') {
     const financeiro = state.data.financeiro.find((item) => item.rowIndex === id);
     if (!financeiro) return;
-    const updated = { ...financeiro, status: 'Pago' };
+    const updated = { ...financeiro, status: 'Pago', dataHora: nowIso() };
     try {
       await apiRequest('updateFinanceiro', updated);
       await loadAllData();
@@ -2353,6 +3366,7 @@ function setupEvents() {
 }
 
 function init() {
+  mountStructuredForms();
   setupEvents();
   loadSidebarState();
   loadTheme();
