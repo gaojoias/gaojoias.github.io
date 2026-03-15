@@ -293,14 +293,7 @@
             <label>Cliente
               <select name="cliente" id="orcamento-cliente" required></select>
             </label>
-            <label>Produto/Servico<input type="text" name="produtoServico" required /></label>
-            <label>Descricao<input type="text" name="descricao" /></label>
             <label>Validade<input type="date" name="validade" /></label>
-            <label>Observacao publica<input type="text" name="obsPublic" /></label>
-            <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
-            <label>Custo material<input type="number" step="0.01" name="custoMaterial" data-admin /></label>
-            <label>Custo outros<input type="number" step="0.01" name="custoOutros" data-admin /></label>
-            <label>Valor cobrado<input type="number" step="0.01" name="valorCobrado" required /></label>
             <label>Status
               <select name="status">
                 <option value="Em negociacao">Em negociacao</option>
@@ -309,6 +302,22 @@
                 <option value="Perdido">Perdido</option>
               </select>
             </label>
+            <label>Observacao publica<input type="text" name="obsPublic" /></label>
+            <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
+            <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="0" /></label>
+            <div class="builder-card items-builder full" data-builder-kind="orcamento">
+              <div class="builder-head">
+                <div>
+                  <h5>Itens do orcamento</h5>
+                  <p class="muted">Adicione produtos, servicos ou combinacoes no mesmo documento.</p>
+                </div>
+                <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+                  <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+                </button>
+              </div>
+              <div class="builder-list" id="orcamento-items"></div>
+              <div class="builder-summary" id="orcamento-summary"></div>
+            </div>
             <button class="btn btn-primary" type="submit">Salvar orcamento</button>
           </form>
         </div>
@@ -330,7 +339,7 @@
                   <th>Numero</th>
                   <th>Data</th>
                   <th>Cliente</th>
-                  <th>Produto/Servico</th>
+                  <th>Itens</th>
                   <th>Valor</th>
                   <th>Lucro</th>
                   <th>Status</th>
@@ -353,19 +362,38 @@
             <label>Cliente
               <select name="cliente" id="venda-cliente" required></select>
             </label>
-            <label>Produto/Servico<input type="text" name="produtoServico" required /></label>
-            <label>Descricao<input type="text" name="descricao" /></label>
-            <label>Valor<input type="number" step="0.01" name="valor" required /></label>
-            <label>Custo total<input type="number" step="0.01" name="totalCustos" /></label>
-            <label>Pagamento
-              <select name="pgto" required>
-                <option value="Dinheiro">Dinheiro</option>
-                <option value="Pix">Pix</option>
-                <option value="Crédito">Crédito</option>
-                <option value="Débito">Débito</option>
-              </select>
-            </label>
             <label class="full">Observacoes<input type="text" name="obs" /></label>
+            <div class="builder-card items-builder full" data-builder-kind="venda">
+              <div class="builder-head">
+                <div>
+                  <h5>Itens da venda</h5>
+                  <p class="muted">Monte a venda com quantos itens forem necessarios.</p>
+                </div>
+                <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+                  <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+                </button>
+              </div>
+              <div class="builder-list" id="venda-items"></div>
+              <div class="builder-summary" id="venda-items-summary"></div>
+            </div>
+            <div class="builder-card payments-builder full" data-builder-kind="venda">
+              <div class="builder-head">
+                <div>
+                  <h5>Recebimentos e saldo</h5>
+                  <p class="muted">Registre entrada, parcelas e saldo pendente.</p>
+                </div>
+                <div class="builder-head-actions">
+                  <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-payment">
+                    <i class="fa-solid fa-plus"></i><span>Adicionar parcela</span>
+                  </button>
+                  <button type="button" class="btn btn-ghost builder-balance-btn" data-action="fill-balance">
+                    <i class="fa-solid fa-scale-balanced"></i><span>Completar saldo</span>
+                  </button>
+                </div>
+              </div>
+              <div class="builder-list" id="venda-payments"></div>
+              <div class="builder-summary" id="venda-payments-summary"></div>
+            </div>
             <button class="btn btn-primary" type="submit">Salvar venda</button>
           </form>
         </div>
@@ -385,10 +413,11 @@
                   <th>Numero</th>
                   <th>Data</th>
                   <th>Cliente</th>
-                  <th>Produto/Servico</th>
+                  <th>Itens</th>
                   <th>Valor</th>
-                  <th>Lucro</th>
-                  <th>Pagamento</th>
+                  <th>Recebido</th>
+                  <th>Saldo</th>
+                  <th>Status</th>
                   <th>Acoes</th>
                 </tr>
               </thead>
