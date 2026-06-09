@@ -2,15 +2,20 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GAO Joias | Sistema Administrativo</title>
+  <meta name="description" content="Sistema administrativo GAO Joias — orçamentos, vendas, financeiro e loja online." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GAO Joias" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <link rel="icon" type="image/png" href="img/favicon.png" />
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#0f1411" />
+  <meta name="theme-color" content="#070a08" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f0ede6" media="(prefers-color-scheme: light)" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -38,9 +43,19 @@
         </div>
       </div>
       <form id="login-form" class="login-form">
+        <div class="login-profiles" aria-label="Perfis de acesso">
+          <button class="profile-select active" type="button" data-login-user="Administrador">
+            <i class="fa-solid fa-user-shield"></i>
+            <span>Administrador</span>
+          </button>
+          <button class="profile-select" type="button" data-login-user="Operador">
+            <i class="fa-solid fa-user-gear"></i>
+            <span>Operador</span>
+          </button>
+        </div>
         <label>
           Usuario
-          <input type="text" name="user" required placeholder="Ex: Mariana" />
+          <input id="login-user" type="text" name="user" required placeholder="Administrador ou Operador" value="Administrador" />
         </label>
         <label>
           Senha
@@ -57,47 +72,53 @@
         </button>
       </form>
       <div class="login-footer">
-        <span>Monitoramento, orcamentos e vendas em um so lugar.</span>
+        <span>Or&ccedil;amentos, vendas e financeiro em um s&oacute; lugar.</span>
       </div>
     </div>
   </section>
 
   <div id="app-shell" class="app hidden">
-    <aside class="sidebar">
+    <div id="sidebar-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(2px);z-index:88;"></div>
+    <aside class="sidebar" role="navigation" aria-label="Menu principal">
       <div class="sidebar-brand">
         <img src="img/logo_white.png" alt="GAO Joias" class="logo-swap" data-logo-dark="img/logo_white.png" data-logo-light="img/logo_black.png" />
         <div>
           <strong>GAO Joias</strong>
+          <small>Painel administrativo</small>
         </div>
-        
       </div>
 
-      <nav class="nav">
-        <button class="nav-link active" data-view="dashboard" data-admin><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></button>
-        <button class="nav-link" data-view="clientes"><i class="fa-solid fa-user-group"></i><span>Clientes</span></button>
-        <button class="nav-link" data-view="orcamentos"><i class="fa-solid fa-file-invoice"></i><span>Orcamentos</span></button>
-        <button class="nav-link" data-view="vendas"><i class="fa-solid fa-coins"></i><span>Vendas</span></button>
-        <button class="nav-link" data-view="produtos" data-admin><i class="fa-solid fa-gem"></i><span>Produtos</span></button>
-        <button class="nav-link" data-view="pedidos" data-admin><i class="fa-solid fa-cart-shopping"></i><span>Pedidos online</span></button>
-        <button class="nav-link" data-view="financeiro" data-admin><i class="fa-solid fa-hand-holding-dollar"></i><span>Financeiro</span></button>
-        <button class="nav-link" data-view="lembretes" data-admin><i class="fa-solid fa-bell"></i><span>Lembretes <small id="lembrete-count" class="muted"></small></span></button>
-        <button class="nav-link" data-view="logs" data-admin><i class="fa-solid fa-shield-halved"></i><span>Logs</span></button>
-        <button class="nav-link" data-view="config" data-admin><i class="fa-solid fa-gear"></i><span>Configuracoes</span></button>
+      <nav class="nav" role="menu">
+        <button class="nav-link active" data-view="dashboard" data-admin role="menuitem"><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></button>
+        <button class="nav-link" data-view="clientes" role="menuitem"><i class="fa-solid fa-user-group"></i><span>Clientes</span></button>
+        <button class="nav-link" data-view="orcamentos" role="menuitem"><i class="fa-solid fa-file-invoice"></i><span>Or&ccedil;amentos</span></button>
+        <button class="nav-link" data-view="vendas" role="menuitem"><i class="fa-solid fa-coins"></i><span>Vendas</span></button>
+        <button class="nav-link" data-view="produtos" data-admin role="menuitem"><i class="fa-solid fa-gem"></i><span>Produtos</span></button>
+        <button class="nav-link" data-view="fornecedores" data-admin role="menuitem"><i class="fa-solid fa-handshake"></i><span>Fornecedores</span></button>
+        <button class="nav-link" data-view="pedidos" data-admin role="menuitem"><i class="fa-solid fa-cart-shopping"></i><span>Pedidos online</span></button>
+        <button class="nav-link" data-view="financeiro" data-admin role="menuitem"><i class="fa-solid fa-hand-holding-dollar"></i><span>Financeiro</span></button>
+        <button class="nav-link" data-view="lembretes" data-admin role="menuitem"><i class="fa-solid fa-bell"></i><span>Lembretes <small id="lembrete-count" class="muted"></small></span></button>
+        <button class="nav-link" data-view="logs" data-admin role="menuitem"><i class="fa-solid fa-shield-halved"></i><span>Logs de acesso</span></button>
+        <button class="nav-link" data-view="config" data-admin role="menuitem"><i class="fa-solid fa-gear"></i><span>Configura&ccedil;&otilde;es</span></button>
       </nav>
 
       <div class="sidebar-footer">
         <div class="profile">
           <div class="avatar" id="profile-avatar">GA</div>
           <div>
-            <strong id="profile-name">Usuario</strong>
+            <strong id="profile-name">Usu&aacute;rio</strong>
             <small id="profile-role">Perfil</small>
           </div>
         </div>
-        <button id="logout-btn" class="btn btn-ghost">
+        <button id="logout-btn" class="btn btn-ghost" aria-label="Sair do sistema">
           <i class="fa-solid fa-arrow-right-from-bracket"></i><span>Sair</span>
         </button>
       </div>
     </aside>
+
+    <button id="sidebar-tab" aria-label="Recolher menu" title="Recolher menu">
+      <span class="sidebar-tab-icon"><i class="fa-solid fa-chevron-left"></i></span>
+    </button>
 
     <main class="content">
       <header class="topbar">
@@ -107,11 +128,11 @@
           <p id="view-subtitle">Visao geral do negocio em tempo real</p>
         </div>
         <div class="topbar-actions">
-          <button id="theme-toggle" class="btn btn-ghost" title="Alternar tema">
-            <i class="fa-solid fa-moon"></i><span>Modo</span>
+          <button id="theme-toggle" class="icon-btn" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+            <i class="fa-solid fa-moon"></i>
           </button>
-          <div class="chip" id="session-chip">Sessao</div>
-          <button id="refresh-btn" class="btn btn-ghost"><i class="fa-solid fa-rotate"></i><span>Atualizar</span></button>
+          <div class="chip" id="session-chip" aria-live="polite">Sess&atilde;o</div>
+          <button id="refresh-btn" class="btn btn-ghost" title="Recarregar dados"><i class="fa-solid fa-rotate"></i><span>Atualizar</span></button>
         </div>
       </header>
 
@@ -247,24 +268,16 @@
       <section id="clientes" class="view">
         <div class="panel">
           <div class="panel-header">
-            <h4>Novo cliente</h4>
-            <span class="muted">Cadastro rapido para novos contatos</span>
-          </div>
-          <form id="cliente-form" class="form-grid">
-            <label>Nome<input type="text" name="nome" required /></label>
-            <label>Telefone<input type="text" name="telefone" required /></label>
-            <label>Email<input type="email" name="email" /></label>
-            <label>Empresa<input type="text" name="empresa" /></label>
-            <label>CPF/CNPJ<input type="text" name="cpfCNPJ" /></label>
-            <label class="full">Observacoes<input type="text" name="obs" /></label>
-            <button class="btn btn-primary" type="submit">Salvar cliente</button>
-          </form>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
             <h4>Clientes cadastrados</h4>
-            <input id="cliente-search" class="input" type="search" placeholder="Buscar por nome ou telefone" />
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="cliente-form">
+                <i class="fa-solid fa-user-plus"></i><span>Novo cliente</span>
+              </button>
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="cliente-search" class="input" type="search" placeholder="Buscar por nome ou telefone" />
+              </div>
+            </div>
           </div>
           <div class="table-wrapper">
             <table class="table" id="cliente-table">
@@ -277,6 +290,7 @@
                   <th>Empresa</th>
                   <th>CPF/CNPJ</th>
                   <th>Obs</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -288,52 +302,17 @@
       <section id="orcamentos" class="view">
         <div class="panel">
           <div class="panel-header">
-            <h4>Novo orcamento</h4>
-            <span class="muted">Monte propostas e calcule margens</span>
-          </div>
-          <form id="orcamento-form" class="form-grid">
-            <label>Cliente
-              <select name="cliente" id="orcamento-cliente" required></select>
-            </label>
-            <label>Validade<input type="date" name="validade" /></label>
-            <label>Status
-              <select name="status">
-                <option value="Em negociacao">Em negociacao</option>
-                <option value="Enviado">Enviado</option>
-                <option value="Aprovado">Aprovado</option>
-                <option value="Perdido">Perdido</option>
-              </select>
-            </label>
-            <label>Observacao publica<input type="text" name="obsPublic" /></label>
-            <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
-            <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="0" /></label>
-            <div class="builder-card items-builder full" data-builder-kind="orcamento">
-              <div class="builder-head">
-                <div>
-                  <h5>Itens do orcamento</h5>
-                  <p class="muted">Adicione produtos, servicos ou combinacoes no mesmo documento.</p>
-                </div>
-                <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
-                  <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
-                </button>
-              </div>
-              <div class="builder-list" id="orcamento-items"></div>
-              <div class="builder-summary" id="orcamento-summary"></div>
-            </div>
-            <button class="btn btn-primary" type="submit">Salvar orcamento</button>
-          </form>
-        </div>
-
-        <div class="panel">
-        <div class="panel-header">
-          <h4>Orcamentos</h4>
-          <div class="panel-actions">
+            <h4>Or&ccedil;amentos</h4>
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="orcamento-form">
+                <i class="fa-solid fa-file-circle-plus"></i><span>Novo or&ccedil;amento</span>
+              </button>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="orcamento-search" class="input" type="search" placeholder="Buscar por cliente ou status" />
               </div>
+            </div>
           </div>
-        </div>
           <div class="table-wrapper">
             <table class="table" id="orcamento-table">
               <thead>
@@ -357,57 +336,17 @@
       <section id="vendas" class="view">
         <div class="panel">
           <div class="panel-header">
-            <h4>Nova venda</h4>
-            <span class="muted">Registre vendas diretas ou de orcamentos</span>
-          </div>
-          <form id="venda-form" class="form-grid">
-            <label>Cliente
-              <select name="cliente" id="venda-cliente" required></select>
-            </label>
-            <label class="full">Observacoes<input type="text" name="obs" /></label>
-            <div class="builder-card items-builder full" data-builder-kind="venda">
-              <div class="builder-head">
-                <div>
-                  <h5>Itens da venda</h5>
-                  <p class="muted">Monte a venda com quantos itens forem necessarios.</p>
-                </div>
-                <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
-                  <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
-                </button>
+            <h4>Vendas</h4>
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="venda-form">
+                <i class="fa-solid fa-coins"></i><span>Nova venda</span>
+              </button>
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="venda-search" class="input" type="search" placeholder="Buscar por cliente ou pagamento" />
               </div>
-              <div class="builder-list" id="venda-items"></div>
-              <div class="builder-summary" id="venda-items-summary"></div>
             </div>
-            <div class="builder-card payments-builder full" data-builder-kind="venda">
-              <div class="builder-head">
-                <div>
-                  <h5>Recebimentos e saldo</h5>
-                  <p class="muted">Registre entrada, parcelas e saldo pendente.</p>
-                </div>
-                <div class="builder-head-actions">
-                  <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-payment">
-                    <i class="fa-solid fa-plus"></i><span>Adicionar parcela</span>
-                  </button>
-                  <button type="button" class="btn btn-ghost builder-balance-btn" data-action="fill-balance">
-                    <i class="fa-solid fa-scale-balanced"></i><span>Completar saldo</span>
-                  </button>
-                </div>
-              </div>
-              <div class="builder-list" id="venda-payments"></div>
-              <div class="builder-summary" id="venda-payments-summary"></div>
-            </div>
-            <button class="btn btn-primary" type="submit">Salvar venda</button>
-          </form>
-        </div>
-
-        <div class="panel">
-        <div class="panel-header">
-          <h4>Vendas</h4>
-          <div class="search-input">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input id="venda-search" class="input" type="search" placeholder="Buscar por cliente ou pagamento" />
           </div>
-        </div>
           <div class="table-wrapper">
             <table class="table" id="venda-table">
               <thead>
@@ -432,44 +371,18 @@
       <section id="produtos" class="view" data-admin>
         <div class="panel">
           <div class="panel-header">
-            <h4>Cadastro de produto</h4>
-            <span class="muted">Produtos publicados aparecem automaticamente na loja online</span>
-          </div>
-          <form id="product-form" class="form-grid">
-            <input type="hidden" name="id" />
-            <label>SKU<input type="text" name="sku" placeholder="Ex: GAO-ALI-001" /></label>
-            <label>Nome<input type="text" name="name" required /></label>
-            <label>Categoria<input type="text" name="categoryName" id="product-category" list="product-categories" /></label>
-            <label>Status
-              <select name="status">
-                <option value="draft">Rascunho</option>
-                <option value="active">Ativo na loja</option>
-                <option value="archived">Arquivado</option>
-              </select>
-            </label>
-            <label>Preco<input type="number" step="0.01" min="0" name="price" required /></label>
-            <label>Custo<input type="number" step="0.01" min="0" name="cost" /></label>
-            <label>Estoque<input type="number" step="1" name="stockQty" value="0" /></label>
-            <label>Alerta estoque baixo<input type="number" step="1" min="0" name="lowStockThreshold" value="2" /></label>
-            <label class="full">URL da imagem<input type="url" name="imageUrl" placeholder="https://..." /></label>
-            <label class="full">Resumo para loja<input type="text" name="shortDescription" maxlength="255" /></label>
-            <label class="full">Descricao<input type="text" name="description" /></label>
-            <label><span><input type="checkbox" name="trackStock" checked /> Controlar estoque</span></label>
-            <label><span><input type="checkbox" name="allowBackorder" /> Permitir venda sem estoque</span></label>
-            <datalist id="product-categories"></datalist>
-            <div class="form-actions full">
-              <button class="btn btn-primary" type="submit">Salvar produto</button>
-              <button id="product-form-reset" class="btn btn-ghost" type="button">Novo produto</button>
-            </div>
-          </form>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
             <h4>Produtos e inventario</h4>
-            <div class="search-input">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input id="product-search" class="input" type="search" placeholder="Buscar por SKU, nome, categoria ou status" />
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="product-form">
+                <i class="fa-solid fa-gem"></i><span>Novo produto</span>
+              </button>
+              <button class="btn btn-ghost" data-open-modal="inventory-form">
+                <i class="fa-solid fa-boxes-stacked"></i><span>Ajuste de estoque</span>
+              </button>
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="product-search" class="input" type="search" placeholder="Buscar por SKU, nome, categoria ou status" />
+              </div>
             </div>
           </div>
           <div class="table-wrapper">
@@ -490,48 +403,58 @@
           </div>
         </div>
 
-        <div class="grid-2">
-          <div class="panel">
-            <div class="panel-header">
-              <h4>Ajuste de estoque</h4>
-              <span class="muted">Entradas, devolucoes e correcao manual</span>
-            </div>
-            <form id="inventory-form" class="form-grid">
-              <label>Produto
-                <select name="productId" id="inventory-product" required></select>
-              </label>
-              <label>Tipo
-                <select name="movementType">
-                  <option value="purchase">Compra/entrada</option>
-                  <option value="adjustment">Ajuste</option>
-                  <option value="return">Devolucao</option>
-                </select>
-              </label>
-              <label>Quantidade (+/-)<input type="number" step="1" name="quantity" required /></label>
-              <label class="full">Motivo<input type="text" name="reason" required /></label>
-              <button class="btn btn-primary" type="submit">Registrar movimento</button>
-            </form>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Ultimos movimentos de estoque</h4>
+            <span class="muted">Auditoria do inventario</span>
           </div>
-          <div class="panel">
-            <div class="panel-header">
-              <h4>Ultimos movimentos</h4>
-              <span class="muted">Auditoria do inventario</span>
+          <div class="table-wrapper">
+            <table class="table" id="inventory-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Produto</th>
+                  <th>Tipo</th>
+                  <th>Qtd.</th>
+                  <th>Saldo</th>
+                  <th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="fornecedores" class="view" data-admin>
+        <div class="panel">
+          <div class="panel-header">
+            <h4>Fornecedores</h4>
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="fornecedor-form">
+                <i class="fa-solid fa-plus"></i><span>Novo fornecedor</span>
+              </button>
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="fornecedor-search" class="input" type="search" placeholder="Buscar por nome, contato ou CNPJ" />
+              </div>
             </div>
-            <div class="table-wrapper">
-              <table class="table" id="inventory-table">
-                <thead>
-                  <tr>
-                    <th>Data</th>
-                    <th>Produto</th>
-                    <th>Tipo</th>
-                    <th>Qtd.</th>
-                    <th>Saldo</th>
-                    <th>Motivo</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
+          </div>
+          <div class="table-wrapper">
+            <table class="table" id="fornecedor-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Contato</th>
+                  <th>Telefone</th>
+                  <th>E-mail</th>
+                  <th>CNPJ/CPF</th>
+                  <th>Status</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -571,49 +494,15 @@
       <section id="financeiro" class="view" data-admin>
         <div class="panel">
           <div class="panel-header">
-            <h4>Novo lancamento financeiro</h4>
-            <span class="muted">Registre entradas manuais e saidas operacionais</span>
-          </div>
-          <form id="financeiro-form" class="form-grid">
-            <label>Data e hora<input type="datetime-local" name="dataHora" /></label>
-            <label>Tipo
-              <select name="tipo" id="financeiro-tipo" required>
-                <option value="Entrada">Entrada</option>
-                <option value="Saida">Saida</option>
-              </select>
-            </label>
-            <label>Categoria
-              <input type="text" name="categoria" id="financeiro-categoria" list="financeiro-categorias" required />
-            </label>
-            <label>Valor<input type="number" step="0.01" min="0" name="valor" required /></label>
-            <label>Status
-              <select name="status" id="financeiro-status" required>
-                <option value="Pago">Pago</option>
-                <option value="A pagar">A pagar</option>
-              </select>
-            </label>
-            <label>Vencimento<input type="date" name="vencimento" /></label>
-            <label class="full">Descricao<input type="text" name="descricao" required /></label>
-            <label class="full">Observacoes<input type="text" name="obs" /></label>
-            <datalist id="financeiro-categorias">
-              <option value="Aporte"></option>
-              <option value="Venda avulsa"></option>
-              <option value="Compra de material"></option>
-              <option value="Servico de limpeza"></option>
-              <option value="Servicos terceiros"></option>
-              <option value="Impostos"></option>
-              <option value="Despesas gerais"></option>
-            </datalist>
-            <button class="btn btn-primary" type="submit">Salvar lancamento</button>
-          </form>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
             <h4>Movimentacoes financeiras</h4>
-            <div class="search-input">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input id="financeiro-search" class="input" type="search" placeholder="Buscar por categoria, descricao ou tipo" />
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="financeiro-form">
+                <i class="fa-solid fa-circle-plus"></i><span>Novo lan&ccedil;amento</span>
+              </button>
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="financeiro-search" class="input" type="search" placeholder="Buscar por categoria, descricao ou tipo" />
+              </div>
             </div>
           </div>
           <div class="table-wrapper">
@@ -641,30 +530,15 @@
       <section id="lembretes" class="view" data-admin>
         <div class="panel">
           <div class="panel-header">
-            <h4>Novo lembrete manual</h4>
-            <span class="muted">Lembretes manuais e compromissos financeiros a pagar</span>
-          </div>
-          <form id="lembrete-form" class="form-grid">
-            <label>Titulo<input type="text" name="titulo" required /></label>
-            <label>Status
-              <select name="status" required>
-                <option value="Pendente">Pendente</option>
-                <option value="Concluido">Concluido</option>
-              </select>
-            </label>
-            <label>Vencimento<input type="date" name="vencimento" required /></label>
-            <label class="full">Descricao<input type="text" name="descricao" required /></label>
-            <label class="full">Observacoes<input type="text" name="obs" /></label>
-            <button class="btn btn-primary" type="submit">Salvar lembrete</button>
-          </form>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
             <h4>Painel de compromissos</h4>
-            <div class="search-input">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input id="lembrete-search" class="input" type="search" placeholder="Buscar por titulo, vencimento, origem ou status" />
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-open-modal="lembrete-form">
+                <i class="fa-solid fa-calendar-plus"></i><span>Novo lembrete</span>
+              </button>
+              <div class="search-input">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="lembrete-search" class="input" type="search" placeholder="Buscar por titulo, vencimento, origem ou status" />
+              </div>
             </div>
           </div>
           <div class="table-wrapper">
@@ -724,12 +598,35 @@
               <a class="btn btn-ghost" href="loja/index.php" target="_blank" rel="noopener noreferrer">Abrir loja</a>
             </div>
             <div class="config-card">
-              <h5>Documentos e notas</h5>
-              <p>Use as opcoes abaixo para configurar impressao e PDFs.</p>
+              <h5>Documentos e impressao</h5>
+              <p>Use impressao normal para HP Deskjet e Web Serial para Bematech MP-4200 HS no Chrome OS.</p>
               <div class="config-actions">
                 <button id="test-pdf" class="btn btn-ghost">Gerar PDF teste</button>
-                <button id="test-print" class="btn btn-ghost">Impressao normal</button>
-                <button id="test-thermal" class="btn btn-ghost">Impressao Bematech HS</button>
+                <button id="test-print" class="btn btn-ghost"><i class="fa-solid fa-print"></i> HP / impressao normal</button>
+              </div>
+            </div>
+            <div class="config-card">
+              <h5>Bematech MP-4200 HS</h5>
+              <p id="thermal-status">Web Serial ainda nao conectado.</p>
+              <label class="compact-label">Velocidade serial
+                <select id="thermal-baud" class="input">
+                  <option value="9600">9600</option>
+                  <option value="19200">19200</option>
+                  <option value="38400">38400</option>
+                  <option value="57600">57600</option>
+                  <option value="115200">115200</option>
+                </select>
+              </label>
+              <label class="compact-label">Formato da Bematech
+                <select id="thermal-mode" class="input">
+                  <option value="text">Texto ESC/POS</option>
+                  <option value="visual">Visual da nota</option>
+                </select>
+              </label>
+              <div class="config-actions">
+                <button id="thermal-connect" class="btn btn-primary" type="button"><i class="fa-solid fa-plug"></i> Conectar Bematech</button>
+                <button id="test-thermal" class="btn btn-ghost" type="button"><i class="fa-solid fa-receipt"></i> Teste Bematech</button>
+                <button id="thermal-disconnect" class="btn btn-ghost" type="button"><i class="fa-solid fa-link-slash"></i> Desconectar</button>
               </div>
             </div>
             <div class="config-card">
@@ -745,7 +642,301 @@
         </div>
       </section>
     </main>
-  </div>
+
+    <!-- Product datalist for item builders -->
+    <datalist id="product-datalist"></datalist>
+
+    <!-- Smart Modal -->
+    <div id="smart-modal" class="smart-modal" role="dialog" aria-modal="true" aria-labelledby="smart-modal-title">
+      <div class="smart-modal-backdrop" id="smart-modal-backdrop"></div>
+      <div class="smart-modal-dialog" id="smart-modal-dialog">
+        <div class="smart-modal-header">
+          <div class="smart-modal-title-block">
+            <div class="smart-modal-icon" id="smart-modal-icon"><i class="fa-solid fa-plus"></i></div>
+            <div>
+              <h3 id="smart-modal-title">Novo registro</h3>
+              <p id="smart-modal-subtitle"></p>
+            </div>
+          </div>
+          <button id="smart-modal-close" class="icon-btn" aria-label="Fechar modal">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="smart-modal-body" id="smart-modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Form Storage (hidden; forms moved here when not in modal) -->
+    <div id="form-storage" style="display:none;" aria-hidden="true">
+
+      <form id="cliente-form" class="form-grid">
+        <input type="hidden" name="id" />
+        <label>Nome<input type="text" name="nome" required /></label>
+        <label>Telefone<input type="text" name="telefone" required /></label>
+        <label>Email<input type="email" name="email" /></label>
+        <label>Empresa<input type="text" name="empresa" /></label>
+        <label>CPF/CNPJ<input type="text" name="cpfCNPJ" /></label>
+        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <button class="btn btn-primary" type="submit">Salvar cliente</button>
+      </form>
+
+      <form id="orcamento-form" class="form-grid">
+        <label>Cliente
+          <select name="cliente" id="orcamento-cliente" required></select>
+        </label>
+        <label>Validade<input type="date" name="validade" /></label>
+        <label>Status
+          <select name="status">
+            <option value="Em negociacao">Em negociacao</option>
+            <option value="Enviado">Enviado</option>
+            <option value="Aprovado">Aprovado</option>
+            <option value="Perdido">Perdido</option>
+          </select>
+        </label>
+        <label>Observacao publica<input type="text" name="obsPublic" /></label>
+        <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
+        <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="0" /></label>
+        <div class="builder-card items-builder full" data-builder-kind="orcamento">
+          <div class="builder-head">
+            <div>
+              <h5>Itens do orcamento</h5>
+              <p class="muted">Adicione produtos, servicos ou combinacoes no mesmo documento.</p>
+            </div>
+            <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+              <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+            </button>
+          </div>
+          <div class="builder-list" id="orcamento-items"></div>
+          <div class="builder-summary" id="orcamento-summary"></div>
+        </div>
+        <button class="btn btn-primary" type="submit">Salvar orcamento</button>
+      </form>
+
+      <form id="venda-form" class="form-grid">
+        <label>Cliente
+          <select name="cliente" id="venda-cliente" required></select>
+        </label>
+        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <div class="builder-card items-builder full" data-builder-kind="venda">
+          <div class="builder-head">
+            <div>
+              <h5>Itens da venda</h5>
+              <p class="muted">Monte a venda com quantos itens forem necessarios.</p>
+            </div>
+            <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
+              <i class="fa-solid fa-plus"></i><span>Adicionar item</span>
+            </button>
+          </div>
+          <div class="builder-list" id="venda-items"></div>
+          <div class="builder-summary" id="venda-items-summary"></div>
+        </div>
+        <div class="builder-card payments-builder full" data-builder-kind="venda">
+          <div class="builder-head">
+            <div>
+              <h5>Recebimentos e saldo</h5>
+              <p class="muted">Registre entrada, parcelas e saldo pendente.</p>
+            </div>
+            <div class="builder-head-actions">
+              <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-payment">
+                <i class="fa-solid fa-plus"></i><span>Adicionar parcela</span>
+              </button>
+              <button type="button" class="btn btn-ghost builder-balance-btn" data-action="fill-balance">
+                <i class="fa-solid fa-scale-balanced"></i><span>Completar saldo</span>
+              </button>
+            </div>
+          </div>
+          <div class="builder-list" id="venda-payments"></div>
+          <div class="builder-summary" id="venda-payments-summary"></div>
+        </div>
+        <button class="btn btn-primary" type="submit">Salvar venda</button>
+      </form>
+
+      <form id="fornecedor-form" class="form-grid">
+        <input type="hidden" name="id" />
+        <label class="full">Nome<input type="text" name="nome" required placeholder="Razão social ou nome fantasia" /></label>
+        <label>CNPJ / CPF<input type="text" name="document" placeholder="00.000.000/0000-00" /></label>
+        <label>Pessoa de contato<input type="text" name="contactPerson" /></label>
+        <label>Telefone<input type="text" name="phone" placeholder="(11) 9 0000-0000" /></label>
+        <label class="full">E-mail<input type="email" name="email" /></label>
+        <label class="full">Observações<input type="text" name="notes" /></label>
+        <label><span><input type="checkbox" name="isActive" checked /> Fornecedor ativo</span></label>
+        <div class="attachment-field full" id="fornecedor-logo-wrap">
+          <label class="attachment-label" id="fornecedor-logo-label">
+            <i class="fa-solid fa-image"></i>
+            <div class="attachment-text">
+              Logo do fornecedor
+              <small>JPG, PNG, WEBP · máx. 8 MB</small>
+            </div>
+            <input type="file" id="fornecedor-logo-input" accept="image/*" tabindex="-1" />
+          </label>
+          <div class="attachment-preview" id="fornecedor-logo-preview" style="display:none">
+            <img id="fornecedor-logo-preview-img" src="" alt="Logo" style="max-height:56px;border-radius:6px;object-fit:contain;flex-shrink:0;">
+            <button type="button" class="attachment-remove-btn" id="fornecedor-logo-remove" aria-label="Remover logo">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <input type="hidden" name="logoUrl" id="fornecedor-logo-url" />
+        </div>
+        <div class="form-actions full">
+          <button class="btn btn-primary" type="submit">Salvar fornecedor</button>
+          <button id="fornecedor-form-reset" class="btn btn-ghost" type="button">Novo fornecedor</button>
+        </div>
+      </form>
+
+      <form id="product-form" class="form-grid">
+        <input type="hidden" name="id" />
+        <label>SKU<input type="text" name="sku" placeholder="Ex: GAO-ALI-001" /></label>
+        <label>Nome<input type="text" name="name" required /></label>
+        <label>Categoria<input type="text" name="categoryName" id="product-category" list="product-categories" /></label>
+        <label>Fornecedor<input type="text" name="supplierName" id="product-supplier" list="supplier-datalist" placeholder="Digite ou selecione" /></label>
+        <label>Status
+          <select name="status">
+            <option value="draft">Rascunho</option>
+            <option value="active">Ativo na loja</option>
+            <option value="archived">Arquivado</option>
+          </select>
+        </label>
+        <label>Preco<input type="number" step="0.01" min="0" name="price" required /></label>
+        <label>Custo<input type="number" step="0.01" min="0" name="cost" /></label>
+        <label>Estoque<input type="number" step="1" name="stockQty" value="0" /></label>
+        <label>Alerta estoque baixo<input type="number" step="1" min="0" name="lowStockThreshold" value="2" /></label>
+        <div class="full">
+          <span class="attachment-label" style="pointer-events:none;border:none;padding:0 0 6px;background:none;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;">
+            Fotos do produto <small style="font-weight:400;text-transform:none;letter-spacing:0;">(até 5 fotos · JPG, PNG, WEBP)</small>
+          </span>
+          <div class="photo-upload-grid" id="product-photos">
+            <div class="photo-slot" data-slot="0">
+              <input type="file" class="photo-file-input" accept="image/*" tabindex="-1" />
+              <div class="photo-slot-empty"><i class="fa-solid fa-camera"></i><span>Principal</span><span class="photo-slot-sub">Foto 1</span></div>
+              <div class="photo-slot-preview" style="display:none"><img src="" alt=""><button type="button" class="photo-remove-btn" tabindex="-1"><i class="fa-solid fa-xmark"></i></button></div>
+              <input type="hidden" name="imageUrls[]" class="photo-url-input" />
+              <div class="photo-slot-progress"></div>
+            </div>
+            <div class="photo-slot" data-slot="1">
+              <input type="file" class="photo-file-input" accept="image/*" tabindex="-1" />
+              <div class="photo-slot-empty"><i class="fa-solid fa-plus"></i><span>Foto 2</span></div>
+              <div class="photo-slot-preview" style="display:none"><img src="" alt=""><button type="button" class="photo-remove-btn" tabindex="-1"><i class="fa-solid fa-xmark"></i></button></div>
+              <input type="hidden" name="imageUrls[]" class="photo-url-input" />
+              <div class="photo-slot-progress"></div>
+            </div>
+            <div class="photo-slot" data-slot="2">
+              <input type="file" class="photo-file-input" accept="image/*" tabindex="-1" />
+              <div class="photo-slot-empty"><i class="fa-solid fa-plus"></i><span>Foto 3</span></div>
+              <div class="photo-slot-preview" style="display:none"><img src="" alt=""><button type="button" class="photo-remove-btn" tabindex="-1"><i class="fa-solid fa-xmark"></i></button></div>
+              <input type="hidden" name="imageUrls[]" class="photo-url-input" />
+              <div class="photo-slot-progress"></div>
+            </div>
+            <div class="photo-slot" data-slot="3">
+              <input type="file" class="photo-file-input" accept="image/*" tabindex="-1" />
+              <div class="photo-slot-empty"><i class="fa-solid fa-plus"></i><span>Foto 4</span></div>
+              <div class="photo-slot-preview" style="display:none"><img src="" alt=""><button type="button" class="photo-remove-btn" tabindex="-1"><i class="fa-solid fa-xmark"></i></button></div>
+              <input type="hidden" name="imageUrls[]" class="photo-url-input" />
+              <div class="photo-slot-progress"></div>
+            </div>
+            <div class="photo-slot" data-slot="4">
+              <input type="file" class="photo-file-input" accept="image/*" tabindex="-1" />
+              <div class="photo-slot-empty"><i class="fa-solid fa-plus"></i><span>Foto 5</span></div>
+              <div class="photo-slot-preview" style="display:none"><img src="" alt=""><button type="button" class="photo-remove-btn" tabindex="-1"><i class="fa-solid fa-xmark"></i></button></div>
+              <input type="hidden" name="imageUrls[]" class="photo-url-input" />
+              <div class="photo-slot-progress"></div>
+            </div>
+          </div>
+        </div>
+        <label class="full">Resumo para loja<input type="text" name="shortDescription" maxlength="255" /></label>
+        <label class="full">Descricao<input type="text" name="description" /></label>
+        <label><span><input type="checkbox" name="trackStock" checked /> Controlar estoque</span></label>
+        <label><span><input type="checkbox" name="allowBackorder" /> Permitir venda sem estoque</span></label>
+        <datalist id="product-categories"></datalist>
+        <datalist id="supplier-datalist"></datalist>
+        <div class="form-actions full">
+          <button class="btn btn-primary" type="submit">Salvar produto</button>
+          <button id="product-form-reset" class="btn btn-ghost" type="button">Novo produto</button>
+        </div>
+      </form>
+
+      <form id="inventory-form" class="form-grid">
+        <label>Produto
+          <select name="productId" id="inventory-product" required></select>
+        </label>
+        <label>Tipo
+          <select name="movementType">
+            <option value="purchase">Compra/entrada</option>
+            <option value="adjustment">Ajuste</option>
+            <option value="return">Devolucao</option>
+          </select>
+        </label>
+        <label>Quantidade (+/-)<input type="number" step="1" name="quantity" required /></label>
+        <label class="full">Motivo<input type="text" name="reason" required /></label>
+        <button class="btn btn-primary" type="submit">Registrar movimento</button>
+      </form>
+
+      <form id="financeiro-form" class="form-grid">
+        <label>Data e hora<input type="datetime-local" name="dataHora" /></label>
+        <label>Tipo
+          <select name="tipo" id="financeiro-tipo" required>
+            <option value="Entrada">Entrada</option>
+            <option value="Saida">Saida</option>
+          </select>
+        </label>
+        <label>Categoria
+          <input type="text" name="categoria" id="financeiro-categoria" list="financeiro-categorias" required />
+        </label>
+        <label>Valor<input type="number" step="0.01" min="0" name="valor" required /></label>
+        <label>Status
+          <select name="status" id="financeiro-status" required>
+            <option value="Pago">Pago</option>
+            <option value="A pagar">A pagar</option>
+          </select>
+        </label>
+        <label>Vencimento<input type="date" name="vencimento" /></label>
+        <label class="full">Descricao<input type="text" name="descricao" required /></label>
+        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <div class="attachment-field full" id="financeiro-attachment-wrap">
+          <label class="attachment-label">
+            <i class="fa-solid fa-paperclip"></i>
+            <div class="attachment-text">
+              Anexar comprovante
+              <small>Imagem ou PDF · máx. 8 MB</small>
+            </div>
+            <input type="file" id="financeiro-attachment-input" accept="image/*,.pdf" tabindex="-1" />
+          </label>
+          <div class="attachment-preview" id="financeiro-attachment-preview" style="display:none">
+            <div class="attachment-preview-icon"><i class="fa-solid fa-file-lines"></i></div>
+            <a id="financeiro-attachment-link" href="#" target="_blank" rel="noopener noreferrer">Comprovante</a>
+            <button type="button" class="attachment-remove-btn" id="financeiro-attachment-remove" aria-label="Remover anexo">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <input type="hidden" name="attachmentUrl" id="financeiro-attachment-url" />
+        </div>
+        <datalist id="financeiro-categorias">
+          <option value="Aporte"></option>
+          <option value="Venda avulsa"></option>
+          <option value="Compra de material"></option>
+          <option value="Servico de limpeza"></option>
+          <option value="Servicos terceiros"></option>
+          <option value="Impostos"></option>
+          <option value="Despesas gerais"></option>
+        </datalist>
+        <button class="btn btn-primary" type="submit">Salvar lancamento</button>
+      </form>
+
+      <form id="lembrete-form" class="form-grid">
+        <label>Titulo<input type="text" name="titulo" required /></label>
+        <label>Status
+          <select name="status" required>
+            <option value="Pendente">Pendente</option>
+            <option value="Concluido">Concluido</option>
+          </select>
+        </label>
+        <label>Vencimento<input type="date" name="vencimento" required /></label>
+        <label class="full">Descricao<input type="text" name="descricao" required /></label>
+        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <button class="btn btn-primary" type="submit">Salvar lembrete</button>
+      </form>
+
+    </div><!-- /#form-storage -->
+  </div><!-- /#app-shell -->
 
   <div id="drawer" class="drawer hidden">
     <div class="drawer-content">
@@ -765,7 +956,307 @@
 
   <noscript>Ative o JavaScript para usar o sistema.</noscript>
 
+  <script>
+    (function () {
+      /* Sidebar overlay for mobile */
+      var overlay = document.getElementById('sidebar-overlay');
+      var sidebar = document.querySelector('.sidebar');
+      if (overlay && sidebar) {
+        var overlayObserver = new MutationObserver(function () {
+          overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+        });
+        overlayObserver.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+        overlay.addEventListener('click', function () {
+          sidebar.classList.remove('open');
+          overlay.style.display = 'none';
+        });
+      }
+
+      /* Sidebar tab — delegates to menu-btn for collapse logic */
+      var sidebarTab = document.getElementById('sidebar-tab');
+      if (sidebarTab) {
+        sidebarTab.addEventListener('click', function () {
+          var menuBtn = document.getElementById('menu-btn');
+          if (menuBtn) menuBtn.click();
+        });
+        var appShell = document.getElementById('app-shell');
+        if (appShell) {
+          var tabObserver = new MutationObserver(function () {
+            var collapsed = appShell.classList.contains('collapsed');
+            sidebarTab.setAttribute('aria-label', collapsed ? 'Expandir menu' : 'Recolher menu');
+            sidebarTab.setAttribute('title', collapsed ? 'Expandir menu' : 'Recolher menu');
+          });
+          tabObserver.observe(appShell, { attributes: true, attributeFilter: ['class'] });
+        }
+      }
+
+      /* Smart Modal */
+      var smModal     = document.getElementById('smart-modal');
+      var smDialog    = document.getElementById('smart-modal-dialog');
+      var smBackdrop  = document.getElementById('smart-modal-backdrop');
+      var smBody      = document.getElementById('smart-modal-body');
+      var smTitle     = document.getElementById('smart-modal-title');
+      var smSubtitle  = document.getElementById('smart-modal-subtitle');
+      var smIcon      = document.getElementById('smart-modal-icon');
+      var smClose     = document.getElementById('smart-modal-close');
+      var formStorage = document.getElementById('form-storage');
+      var currentForm    = null;
+      var closeTimer     = null;
+      var pendingSubmit  = false;
+
+      var modalCfg = {
+        'cliente-form'    : { title: 'Novo cliente',          subtitle: 'Cadastro rápido de contatos',               icon: 'fa-user-plus',           wide: false },
+        'orcamento-form'  : { title: 'Novo orçamento',   subtitle: 'Monte propostas e calcule margens',              icon: 'fa-file-invoice',        wide: true  },
+        'venda-form'      : { title: 'Nova venda',             subtitle: 'Registre vendas diretas ou de orçamentos',  icon: 'fa-coins',               wide: true  },
+        'product-form'    : { title: 'Cadastrar produto',      subtitle: 'Produtos publicados aparecem na loja online',   icon: 'fa-gem',                 wide: false },
+        'inventory-form'  : { title: 'Ajuste de estoque',      subtitle: 'Entradas, devoluções e correção manual', icon: 'fa-boxes-stacked', wide: false },
+        'financeiro-form' : { title: 'Novo lançamento',   subtitle: 'Registre entradas e saídas operacionais',   icon: 'fa-hand-holding-dollar', wide: false },
+        'lembrete-form'   : { title: 'Novo lembrete',          subtitle: 'Lembretes manuais e compromissos',              icon: 'fa-bell',                wide: false },
+        'fornecedor-form' : { title: 'Novo fornecedor',        subtitle: 'Cadastro de fornecedores e distribuidores',     icon: 'fa-handshake',           wide: false }
+      };
+
+      function openModal(formId) {
+        if (!smModal || !formStorage) return;
+        var form = document.getElementById(formId);
+        if (!form) return;
+        var cfg = modalCfg[formId] || { title: 'Novo registro', subtitle: '', icon: 'fa-plus', wide: false };
+
+        smTitle.textContent    = cfg.title;
+        smSubtitle.textContent = cfg.subtitle;
+        smIcon.innerHTML       = '<i class="fa-solid ' + cfg.icon + '"></i>';
+        smDialog.classList.toggle('wide', cfg.wide);
+
+        smBody.innerHTML = '';
+        smBody.appendChild(form);
+        currentForm = form;
+
+        smModal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+
+        setTimeout(function () {
+          var first = smBody.querySelector('input:not([type=hidden]), select, textarea');
+          if (first) first.focus();
+        }, 360);
+      }
+
+      function closeModal(immediate) {
+        if (!smModal) return;
+        smModal.classList.remove('open');
+        document.body.style.overflow = '';
+        var delay = immediate ? 0 : 340;
+        setTimeout(function () {
+          if (currentForm && formStorage) formStorage.appendChild(currentForm);
+          currentForm  = null;
+          pendingSubmit = false;
+          if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+        }, delay);
+      }
+
+      if (smClose)   smClose.addEventListener('click', function () { closeModal(false); });
+      if (smBackdrop) smBackdrop.addEventListener('click', function () { closeModal(false); });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && smModal && smModal.classList.contains('open')) closeModal(false);
+      });
+
+      /* Track form submission so we can distinguish save-reset from clear-reset */
+      document.addEventListener('submit', function (e) {
+        if (currentForm && e.target === currentForm) pendingSubmit = true;
+      }, true);
+
+      /* Detect form success: app.js calls form.reset() after a successful save */
+      document.addEventListener('reset', function (e) {
+        if (pendingSubmit && currentForm && e.target === currentForm && smModal && smModal.classList.contains('open')) {
+          pendingSubmit = false;
+          closeTimer = setTimeout(function () { closeModal(false); }, 900);
+        } else if (currentForm && e.target === currentForm) {
+          pendingSubmit = false; /* clear-form button — stay open */
+        }
+      }, true);
+
+      /* Open modal via data-open-modal attribute */
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-open-modal]');
+        if (btn) {
+          e.preventDefault();
+          openModal(btn.getAttribute('data-open-modal'));
+        }
+      });
+
+      /* Auto-open product-form when app.js fires edit-product action */
+      document.addEventListener('click', function (e) {
+        var editBtn = e.target.closest('[data-action="edit-product"]');
+        if (editBtn && (!smModal || !smModal.classList.contains('open'))) {
+          openModal('product-form');
+        }
+      }, true); /* capture phase — fires before app.js populates form */
+
+      /* Auto-open cliente-form when edit-cliente action fires */
+      document.addEventListener('click', function (e) {
+        var editBtn = e.target.closest('[data-action="edit-cliente"]');
+        if (editBtn && (!smModal || !smModal.classList.contains('open'))) {
+          openModal('cliente-form');
+          /* Update modal title to reflect edit mode */
+          setTimeout(function () {
+            if (smTitle) smTitle.textContent = 'Editar cliente';
+            if (smSubtitle) smSubtitle.textContent = 'Altere os dados e salve';
+          }, 10);
+        }
+      }, true);
+
+      window.smartModal = { open: openModal, close: closeModal };
+
+      /* -----------------------------------------------
+         Photo upload (product form) — event delegation
+         ----------------------------------------------- */
+      document.addEventListener('change', function (e) {
+        var fileInput = e.target.closest('.photo-file-input');
+        if (!fileInput) return;
+        var slot = fileInput.closest('.photo-slot');
+        if (!slot || !fileInput.files || !fileInput.files[0]) return;
+
+        var file = fileInput.files[0];
+        var progress = slot.querySelector('.photo-slot-progress');
+        var urlInput = slot.querySelector('.photo-url-input');
+        slot.classList.add('uploading');
+        if (progress) { progress.style.transform = 'scaleX(0.3)'; }
+
+        var fd = new FormData();
+        fd.append('file', file);
+
+        fetch('api/upload.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            slot.classList.remove('uploading');
+            if (!data.ok) { alert(data.error || 'Erro no upload.'); return; }
+            if (progress) { progress.style.transform = 'scaleX(1)'; }
+            urlInput.value = data.url;
+            var preview = slot.querySelector('.photo-slot-preview');
+            var img     = slot.querySelector('.photo-slot-preview img');
+            if (preview && img) {
+              img.src = data.url;
+              preview.style.display = 'block';
+              setTimeout(function () { if (progress) progress.style.transform = 'scaleX(0)'; }, 600);
+            }
+          })
+          .catch(function () {
+            slot.classList.remove('uploading');
+            alert('Falha no upload. Verifique sua conexao.');
+          });
+      });
+
+      /* Photo remove button */
+      document.addEventListener('click', function (e) {
+        var removeBtn = e.target.closest('.photo-remove-btn');
+        if (!removeBtn) return;
+        var slot     = removeBtn.closest('.photo-slot');
+        var preview  = slot && slot.querySelector('.photo-slot-preview');
+        var urlInput = slot && slot.querySelector('.photo-url-input');
+        var fileInput= slot && slot.querySelector('.photo-file-input');
+        if (preview)  { preview.style.display = 'none'; }
+        if (urlInput) { urlInput.value = ''; }
+        if (fileInput){ fileInput.value = ''; }
+      });
+
+      /* -----------------------------------------------
+         Attachment upload (financeiro form)
+         ----------------------------------------------- */
+      document.addEventListener('change', function (e) {
+        var attachInput = e.target.closest('#financeiro-attachment-input');
+        if (!attachInput || !attachInput.files || !attachInput.files[0]) return;
+
+        var file    = attachInput.files[0];
+        var label   = attachInput.closest('.attachment-label');
+        var preview = document.getElementById('financeiro-attachment-preview');
+        var link    = document.getElementById('financeiro-attachment-link');
+        var urlHid  = document.getElementById('financeiro-attachment-url');
+
+        if (label) label.style.opacity = '0.6';
+
+        var fd = new FormData();
+        fd.append('file', file);
+
+        fetch('api/upload.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (label) label.style.opacity = '';
+            if (!data.ok) { alert(data.error || 'Erro no upload.'); return; }
+            urlHid.value = data.url;
+            if (link) {
+              link.href = data.url;
+              link.textContent = file.name || 'Comprovante';
+            }
+            var icon = preview && preview.querySelector('.attachment-preview-icon i');
+            if (icon) {
+              icon.className = /pdf/i.test(file.type) ? 'fa-solid fa-file-pdf' : 'fa-solid fa-image';
+            }
+            if (preview) preview.style.display = 'flex';
+          })
+          .catch(function () {
+            if (label) label.style.opacity = '';
+            alert('Falha no upload.');
+          });
+      });
+
+      /* Attachment remove */
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('#financeiro-attachment-remove')) return;
+        var preview  = document.getElementById('financeiro-attachment-preview');
+        var urlHid   = document.getElementById('financeiro-attachment-url');
+        var attachIn = document.getElementById('financeiro-attachment-input');
+        if (preview)  preview.style.display = 'none';
+        if (urlHid)   urlHid.value = '';
+        if (attachIn) attachIn.value = '';
+      });
+
+      /* -----------------------------------------------
+         Logo upload (fornecedor form)
+         ----------------------------------------------- */
+      document.addEventListener('change', function (e) {
+        var logoInput = e.target.closest('#fornecedor-logo-input');
+        if (!logoInput || !logoInput.files || !logoInput.files[0]) return;
+
+        var file    = logoInput.files[0];
+        var label   = document.getElementById('fornecedor-logo-label');
+        var preview = document.getElementById('fornecedor-logo-preview');
+        var img     = document.getElementById('fornecedor-logo-preview-img');
+        var urlHid  = document.getElementById('fornecedor-logo-url');
+
+        if (label) label.style.opacity = '0.6';
+
+        var fd = new FormData();
+        fd.append('file', file);
+
+        fetch('api/upload.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (label) label.style.opacity = '';
+            if (!data.ok) { alert(data.error || 'Erro no upload.'); return; }
+            urlHid.value = data.url;
+            if (img) { img.src = data.url; }
+            if (preview) preview.style.display = 'flex';
+          })
+          .catch(function () {
+            if (label) label.style.opacity = '';
+            alert('Falha no upload.');
+          });
+      });
+
+      /* Logo remove */
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('#fornecedor-logo-remove')) return;
+        var preview = document.getElementById('fornecedor-logo-preview');
+        var urlHid  = document.getElementById('fornecedor-logo-url');
+        var logoIn  = document.getElementById('fornecedor-logo-input');
+        if (preview) preview.style.display = 'none';
+        if (urlHid)  urlHid.value = '';
+        if (logoIn)  logoIn.value = '';
+      });
+    })();
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="js/app.js" defer></script>
 </body>

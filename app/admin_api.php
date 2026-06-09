@@ -335,6 +335,7 @@ function admin_finance_payload(array $row): array
         'origem' => $row['source'],
         'referencia' => $row['reference'] ?? '',
         'obs' => $row['notes'] ?? '',
+        'attachmentUrl' => $row['attachment_url'] ?? '',
     ];
 }
 
@@ -382,6 +383,22 @@ function admin_category_payload(array $row): array
 function admin_product_payload(array $row): array
 {
     $available = (int)$row['stock_qty'] - (int)$row['reserved_qty'];
+    $primaryUrl = $row['image_url'] ?? '';
+
+    $imgStmt = db()->prepare('SELECT image_url FROM product_images WHERE product_id = ? ORDER BY sort_order, id');
+    $imgStmt->execute([(int)$row['id']]);
+    $extraUrls = array_column($imgStmt->fetchAll(), 'image_url');
+
+    $imageUrls = [];
+    if ($primaryUrl !== '') {
+        $imageUrls[] = $primaryUrl;
+    }
+    foreach ($extraUrls as $u) {
+        if ($u !== '' && !in_array($u, $imageUrls, true)) {
+            $imageUrls[] = $u;
+        }
+    }
+
     return [
         'id' => (int)$row['id'],
         'rowIndex' => (int)$row['id'],
@@ -390,6 +407,8 @@ function admin_product_payload(array $row): array
         'slug' => $row['slug'],
         'categoryId' => $row['category_id'] !== null ? (int)$row['category_id'] : null,
         'categoryName' => $row['category_name'] ?? '',
+        'supplierId' => $row['supplier_id'] !== null ? (int)$row['supplier_id'] : null,
+        'supplierName' => $row['supplier_name'] ?? '',
         'shortDescription' => $row['short_description'] ?? '',
         'description' => $row['description'] ?? '',
         'status' => $row['status'],
@@ -403,7 +422,8 @@ function admin_product_payload(array $row): array
         'reservedQty' => (int)$row['reserved_qty'],
         'availableQty' => $available,
         'lowStockThreshold' => (int)$row['low_stock_threshold'],
-        'imageUrl' => $row['image_url'] ?? '',
+        'imageUrl' => $primaryUrl,
+        'imageUrls' => $imageUrls,
         'stripePriceId' => $row['stripe_price_id'] ?? '',
         'createdAt' => $row['created_at'],
         'updatedAt' => $row['updated_at'],
@@ -580,29 +600,52 @@ function admin_recalculate_sale_totals(array $items, array $payments): array
     ];
 }
 
-function admin_list_all(): array
+function admin_is_admin(array $user): bool
+{
+    return ($user['role'] ?? '') === 'admin';
+}
+
+function admin_require_admin_action(array $user): void
+{
+    if (!admin_is_admin($user)) {
+        json_response(['ok' => false, 'error' => 'Acesso restrito ao administrador.'], 403);
+    }
+}
+
+function admin_list_all(array $user): array
 {
     $customers = db()->query('SELECT * FROM customers ORDER BY id DESC')->fetchAll();
     $quotes = db()->query('SELECT * FROM quotes ORDER BY id DESC')->fetchAll();
     $sales = db()->query('SELECT * FROM sales ORDER BY id DESC')->fetchAll();
-    $finance = db()->query('SELECT * FROM financial_entries ORDER BY created_at DESC, id DESC')->fetchAll();
-    $reminders = db()->query('SELECT * FROM reminders ORDER BY due_at ASC, id DESC')->fetchAll();
-    $logs = db()->query('SELECT * FROM access_logs ORDER BY id DESC LIMIT 200')->fetchAll();
     $categories = db()->query('SELECT * FROM product_categories ORDER BY sort_order ASC, name ASC')->fetchAll();
+    $suppliers = db()->query('SELECT * FROM suppliers ORDER BY name ASC')->fetchAll();
     $products = db()->query(
-        'SELECT p.*, c.name AS category_name
+        'SELECT p.*, c.name AS category_name, s.name AS supplier_name
          FROM products p
          LEFT JOIN product_categories c ON c.id = p.category_id
+         LEFT JOIN suppliers s ON s.id = p.supplier_id
          ORDER BY p.updated_at DESC, p.id DESC'
     )->fetchAll();
-    $inventory = db()->query(
-        'SELECT m.*, p.name AS product_name, p.sku
-         FROM inventory_movements m
-         INNER JOIN products p ON p.id = m.product_id
-         ORDER BY m.created_at DESC, m.id DESC
-         LIMIT 300'
-    )->fetchAll();
-    $orders = db()->query('SELECT * FROM orders ORDER BY id DESC LIMIT 300')->fetchAll();
+
+    $finance = [];
+    $reminders = [];
+    $logs = [];
+    $inventory = [];
+    $orders = [];
+
+    if (admin_is_admin($user)) {
+        $finance = db()->query('SELECT * FROM financial_entries ORDER BY created_at DESC, id DESC')->fetchAll();
+        $reminders = db()->query('SELECT * FROM reminders ORDER BY due_at ASC, id DESC')->fetchAll();
+        $logs = db()->query('SELECT * FROM access_logs ORDER BY id DESC LIMIT 200')->fetchAll();
+        $inventory = db()->query(
+            'SELECT m.*, p.name AS product_name, p.sku
+             FROM inventory_movements m
+             INNER JOIN products p ON p.id = m.product_id
+             ORDER BY m.created_at DESC, m.id DESC
+             LIMIT 300'
+        )->fetchAll();
+        $orders = db()->query('SELECT * FROM orders ORDER BY id DESC LIMIT 300')->fetchAll();
+    }
 
     return [
         'clientes' => array_map('admin_customer_payload', $customers),
@@ -612,6 +655,7 @@ function admin_list_all(): array
         'lembretes' => array_map('admin_reminder_payload', $reminders),
         'logs' => array_map('admin_log_payload', $logs),
         'categorias' => array_map('admin_category_payload', $categories),
+        'fornecedores' => array_map('admin_supplier_payload', $suppliers),
         'produtos' => array_map('admin_product_payload', $products),
         'inventoryMovements' => array_map('admin_inventory_payload', $inventory),
         'pedidos' => array_map('admin_order_payload', $orders),
@@ -641,6 +685,34 @@ function admin_create_customer(array $payload): array
 
     $stmt = db()->prepare('SELECT * FROM customers WHERE id = ?');
     $stmt->execute([(int)db()->lastInsertId()]);
+    return admin_customer_payload($stmt->fetch());
+}
+
+function admin_update_customer(array $payload): array
+{
+    $id = (int)($payload['id'] ?? $payload['rowIndex'] ?? 0);
+    if ($id <= 0) {
+        json_response(['ok' => false, 'error' => 'Cliente invalido.'], 422);
+    }
+    $name = trim((string)($payload['nome'] ?? ''));
+    if ($name === '') {
+        json_response(['ok' => false, 'error' => 'Informe o nome do cliente.'], 422);
+    }
+    $stmt = db()->prepare(
+        'UPDATE customers SET name = ?, email = ?, phone = ?, company = ?, document = ?, notes = ?
+         WHERE id = ?'
+    );
+    $stmt->execute([
+        $name,
+        trim((string)($payload['email'] ?? '')) ?: null,
+        trim((string)($payload['telefone'] ?? '')) ?: null,
+        trim((string)($payload['empresa'] ?? '')) ?: null,
+        trim((string)($payload['cpfCNPJ'] ?? '')) ?: null,
+        trim((string)($payload['obs'] ?? '')) ?: null,
+        $id,
+    ]);
+    $stmt = db()->prepare('SELECT * FROM customers WHERE id = ?');
+    $stmt->execute([$id]);
     return admin_customer_payload($stmt->fetch());
 }
 
@@ -856,8 +928,8 @@ function admin_create_finance(array $payload, array $user): array
         json_response(['ok' => false, 'error' => 'Informe um valor maior que zero.'], 422);
     }
     $stmt = db()->prepare(
-        'INSERT INTO financial_entries (type, category, description, amount_cents, status, due_at, source, reference, notes, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO financial_entries (type, category, description, amount_cents, status, due_at, source, reference, notes, attachment_url, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
         ($payload['tipo'] ?? 'Entrada') === 'Saida' ? 'Saida' : 'Entrada',
@@ -869,6 +941,7 @@ function admin_create_finance(array $payload, array $user): array
         trim((string)($payload['origem'] ?? 'Manual')) ?: 'Manual',
         trim((string)($payload['referencia'] ?? '')) ?: null,
         trim((string)($payload['obs'] ?? '')) ?: null,
+        trim((string)($payload['attachmentUrl'] ?? '')) ?: null,
         (int)$user['id'],
         to_mysql_datetime($payload['dataHora'] ?? null),
     ]);
@@ -888,7 +961,7 @@ function admin_update_finance(array $payload): array
     }
     $stmt = db()->prepare(
         'UPDATE financial_entries
-         SET type = ?, category = ?, description = ?, amount_cents = ?, status = ?, due_at = ?, source = ?, reference = ?, notes = ?, created_at = ?
+         SET type = ?, category = ?, description = ?, amount_cents = ?, status = ?, due_at = ?, source = ?, reference = ?, notes = ?, attachment_url = ?, created_at = ?
          WHERE id = ?'
     );
     $stmt->execute([
@@ -901,6 +974,7 @@ function admin_update_finance(array $payload): array
         trim((string)($payload['origem'] ?? 'Manual')) ?: 'Manual',
         trim((string)($payload['referencia'] ?? '')) ?: null,
         trim((string)($payload['obs'] ?? '')) ?: null,
+        trim((string)($payload['attachmentUrl'] ?? '')) ?: null,
         to_mysql_datetime($payload['dataHora'] ?? null),
         $id,
     ]);
@@ -986,6 +1060,102 @@ function admin_category_id_from_payload(array $payload): ?int
     return (int)db()->lastInsertId();
 }
 
+/* ── FORNECEDORES ─────────────────────────────────────────── */
+
+function admin_supplier_payload(array $row): array
+{
+    return [
+        'id'            => (int)$row['id'],
+        'nome'          => $row['name'],
+        'email'         => $row['email'] ?? '',
+        'phone'         => $row['phone'] ?? '',
+        'document'      => $row['document'] ?? '',
+        'contactPerson' => $row['contact_person'] ?? '',
+        'notes'         => $row['notes'] ?? '',
+        'isActive'      => (int)$row['is_active'] === 1,
+        'logoUrl'       => $row['logo_url'] ?? '',
+        'createdAt'     => $row['created_at'],
+    ];
+}
+
+function admin_get_supplier(int $id): array
+{
+    $stmt = db()->prepare('SELECT * FROM suppliers WHERE id = ?');
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        json_response(['ok' => false, 'error' => 'Fornecedor nao encontrado.'], 404);
+    }
+    return admin_supplier_payload($row);
+}
+
+function admin_create_supplier(array $payload): array
+{
+    $name = trim((string)($payload['nome'] ?? ''));
+    if ($name === '') {
+        json_response(['ok' => false, 'error' => 'Informe o nome do fornecedor.'], 422);
+    }
+    $stmt = db()->prepare(
+        'INSERT INTO suppliers (name, email, phone, document, contact_person, notes, is_active, logo_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $name,
+        trim((string)($payload['email'] ?? '')) ?: null,
+        trim((string)($payload['phone'] ?? '')) ?: null,
+        trim((string)($payload['document'] ?? '')) ?: null,
+        trim((string)($payload['contactPerson'] ?? '')) ?: null,
+        trim((string)($payload['notes'] ?? '')) ?: null,
+        !empty($payload['isActive']) ? 1 : 0,
+        trim((string)($payload['logoUrl'] ?? '')) ?: null,
+    ]);
+    return admin_get_supplier((int)db()->lastInsertId());
+}
+
+function admin_update_supplier(array $payload): array
+{
+    $id = (int)($payload['id'] ?? 0);
+    if ($id <= 0) {
+        json_response(['ok' => false, 'error' => 'Fornecedor invalido.'], 422);
+    }
+    $name = trim((string)($payload['nome'] ?? ''));
+    if ($name === '') {
+        json_response(['ok' => false, 'error' => 'Informe o nome do fornecedor.'], 422);
+    }
+    $stmt = db()->prepare(
+        'UPDATE suppliers SET name = ?, email = ?, phone = ?, document = ?, contact_person = ?, notes = ?, is_active = ?, logo_url = ?
+         WHERE id = ?'
+    );
+    $stmt->execute([
+        $name,
+        trim((string)($payload['email'] ?? '')) ?: null,
+        trim((string)($payload['phone'] ?? '')) ?: null,
+        trim((string)($payload['document'] ?? '')) ?: null,
+        trim((string)($payload['contactPerson'] ?? '')) ?: null,
+        trim((string)($payload['notes'] ?? '')) ?: null,
+        !empty($payload['isActive']) ? 1 : 0,
+        trim((string)($payload['logoUrl'] ?? '')) ?: null,
+        $id,
+    ]);
+    return admin_get_supplier($id);
+}
+
+function admin_supplier_id_from_payload(array $payload): ?int
+{
+    $name = trim((string)($payload['supplierName'] ?? ''));
+    if ($name === '') return null;
+    $stmt = db()->prepare('SELECT id FROM suppliers WHERE name = ? LIMIT 1');
+    $stmt->execute([$name]);
+    $id = $stmt->fetchColumn();
+    if ($id !== false) return (int)$id;
+    // Auto-cria fornecedor se não existir
+    $ins = db()->prepare('INSERT INTO suppliers (name, is_active) VALUES (?, 1)');
+    $ins->execute([$name]);
+    return (int)db()->lastInsertId();
+}
+
+/* ── PRODUTOS ─────────────────────────────────────────────── */
+
 function admin_create_product(array $payload, array $user): array
 {
     $name = trim((string)($payload['name'] ?? $payload['nome'] ?? ''));
@@ -1001,11 +1171,12 @@ function admin_create_product(array $payload, array $user): array
     db()->beginTransaction();
     try {
         $stmt = db()->prepare(
-            'INSERT INTO products (category_id, sku, name, slug, short_description, description, status, product_type, price_cents, compare_at_cents, cost_cents, track_stock, allow_backorder, stock_qty, low_stock_threshold, image_url, stripe_price_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO products (category_id, supplier_id, sku, name, slug, short_description, description, status, product_type, price_cents, compare_at_cents, cost_cents, track_stock, allow_backorder, stock_qty, low_stock_threshold, image_url, stripe_price_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             admin_category_id_from_payload($payload),
+            admin_supplier_id_from_payload($payload),
             $sku,
             $name,
             admin_unique_slug((string)($payload['slug'] ?? $name), 'products'),
@@ -1027,6 +1198,7 @@ function admin_create_product(array $payload, array $user): array
         if ($stock !== 0) {
             admin_record_inventory_movement($id, 'initial', $stock, 'Estoque inicial', null, null, (int)$user['id'], 0);
         }
+        admin_sync_product_images($id, $payload);
         db()->commit();
     } catch (Throwable $e) {
         db()->rollBack();
@@ -1039,9 +1211,10 @@ function admin_create_product(array $payload, array $user): array
 function admin_get_product(int $id): array
 {
     $stmt = db()->prepare(
-        'SELECT p.*, c.name AS category_name
+        'SELECT p.*, c.name AS category_name, s.name AS supplier_name
          FROM products p
          LEFT JOIN product_categories c ON c.id = p.category_id
+         LEFT JOIN suppliers s ON s.id = p.supplier_id
          WHERE p.id = ?'
     );
     $stmt->execute([$id]);
@@ -1074,13 +1247,14 @@ function admin_update_product(array $payload, array $user): array
     try {
         $stmt = db()->prepare(
             'UPDATE products
-             SET category_id = ?, sku = ?, name = ?, slug = ?, short_description = ?, description = ?, status = ?, product_type = ?,
+             SET category_id = ?, supplier_id = ?, sku = ?, name = ?, slug = ?, short_description = ?, description = ?, status = ?, product_type = ?,
                  price_cents = ?, compare_at_cents = ?, cost_cents = ?, track_stock = ?, allow_backorder = ?, stock_qty = ?,
                  low_stock_threshold = ?, image_url = ?, stripe_price_id = ?
              WHERE id = ?'
         );
         $stmt->execute([
             admin_category_id_from_payload($payload),
+            admin_supplier_id_from_payload($payload),
             $sku,
             trim((string)($payload['name'] ?? '')),
             admin_unique_slug((string)($payload['slug'] ?? $payload['name'] ?? ('produto-' . $id)), 'products', $id),
@@ -1103,6 +1277,7 @@ function admin_update_product(array $payload, array $user): array
         if ($diff !== 0) {
             admin_record_inventory_movement($id, 'adjustment', $diff, 'Ajuste pelo cadastro do produto', null, null, (int)$user['id'], (int)$currentStock);
         }
+        admin_sync_product_images($id, $payload);
         db()->commit();
     } catch (Throwable $e) {
         db()->rollBack();
@@ -1110,6 +1285,25 @@ function admin_update_product(array $payload, array $user): array
     }
 
     return admin_get_product($id);
+}
+
+function admin_sync_product_images(int $productId, array $payload): void
+{
+    $urls = array_values(array_filter(
+        array_map('trim', (array)($payload['imageUrls'] ?? [])),
+        fn($u) => $u !== ''
+    ));
+    if (empty($urls)) {
+        return;
+    }
+    // Primary image stays in products.image_url; extras go into product_images
+    $primary = $urls[0];
+    db()->prepare('UPDATE products SET image_url = ? WHERE id = ?')->execute([$primary, $productId]);
+    db()->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$productId]);
+    $ins = db()->prepare('INSERT INTO product_images (product_id, image_url, sort_order) VALUES (?, ?, ?)');
+    foreach ($urls as $i => $url) {
+        $ins->execute([$productId, $url, $i]);
+    }
 }
 
 function admin_record_inventory_movement(int $productId, string $type, int $quantity, string $reason, ?string $referenceType, ?int $referenceId, ?int $userId, ?int $beforeOverride = null): void
@@ -1197,9 +1391,26 @@ function admin_update_order(array $payload): array
 
 function admin_handle_action(string $action, array $payload, array $user): mixed
 {
+    $adminOnlyActions = [
+        'createFinanceiro',
+        'updateFinanceiro',
+        'createLembrete',
+        'updateLembrete',
+        'createProduct',
+        'updateProduct',
+        'createFornecedor',
+        'updateFornecedor',
+        'adjustInventory',
+        'updateOrder',
+    ];
+    if (in_array($action, $adminOnlyActions, true)) {
+        admin_require_admin_action($user);
+    }
+
     return match ($action) {
-        'listAll' => admin_list_all(),
+        'listAll' => admin_list_all($user),
         'createCliente' => admin_create_customer($payload),
+        'updateCliente' => admin_update_customer($payload),
         'createOrcamento' => admin_create_quote($payload, $user),
         'updateOrcamento' => admin_update_quote($payload, $user),
         'createVenda' => admin_create_sale($payload, $user),
@@ -1210,6 +1421,8 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'updateLembrete' => admin_update_reminder($payload),
         'createProduct' => admin_create_product($payload, $user),
         'updateProduct' => admin_update_product($payload, $user),
+        'createFornecedor' => admin_create_supplier($payload),
+        'updateFornecedor' => admin_update_supplier($payload),
         'adjustInventory' => admin_adjust_inventory($payload, $user),
         'updateOrder' => admin_update_order($payload),
         default => json_response(['ok' => false, 'error' => 'Acao invalida.'], 400),

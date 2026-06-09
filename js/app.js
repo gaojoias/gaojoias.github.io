@@ -2,7 +2,9 @@ const API_ENDPOINT = 'api/index.php';
 
 const STORAGE_KEYS = {
   sidebarCollapsed: 'gao_sidebar_collapsed',
-  theme: 'gao_theme'
+  theme: 'gao_theme',
+  thermalBaudRate: 'gao_thermal_baud_rate',
+  thermalMode: 'gao_thermal_mode'
 };
 
 const state = {
@@ -18,6 +20,7 @@ const state = {
     lembretes: [],
     categorias: [],
     produtos: [],
+    fornecedores: [],
     inventoryMovements: [],
     pedidos: []
   },
@@ -30,6 +33,8 @@ const dom = {
   loginScreen: document.getElementById('login-screen'),
   appShell: document.getElementById('app-shell'),
   loginForm: document.getElementById('login-form'),
+  loginUser: document.getElementById('login-user'),
+  profileSelectButtons: document.querySelectorAll('.profile-select'),
   loginPassword: document.getElementById('login-password'),
   togglePassword: document.getElementById('toggle-password'),
   logoutBtn: document.getElementById('logout-btn'),
@@ -66,6 +71,11 @@ const dom = {
   productTable: document.getElementById('product-table')?.querySelector('tbody'),
   productSearch: document.getElementById('product-search'),
   productCategories: document.getElementById('product-categories'),
+  supplierDatalist: document.getElementById('supplier-datalist'),
+  fornecedorForm: document.getElementById('fornecedor-form'),
+  fornecedorFormReset: document.getElementById('fornecedor-form-reset'),
+  fornecedorTable: document.getElementById('fornecedor-table')?.querySelector('tbody'),
+  fornecedorSearch: document.getElementById('fornecedor-search'),
   inventoryForm: document.getElementById('inventory-form'),
   inventoryProduct: document.getElementById('inventory-product'),
   inventoryTable: document.getElementById('inventory-table')?.querySelector('tbody'),
@@ -89,6 +99,11 @@ const dom = {
   testPdf: document.getElementById('test-pdf'),
   testPrint: document.getElementById('test-print'),
   testThermal: document.getElementById('test-thermal'),
+  thermalStatus: document.getElementById('thermal-status'),
+  thermalBaud: document.getElementById('thermal-baud'),
+  thermalMode: document.getElementById('thermal-mode'),
+  thermalConnect: document.getElementById('thermal-connect'),
+  thermalDisconnect: document.getElementById('thermal-disconnect'),
   exportClientes: document.getElementById('export-clientes'),
   exportVendas: document.getElementById('export-vendas'),
   exportFinanceiro: document.getElementById('export-financeiro'),
@@ -133,12 +148,19 @@ const subtitles = {
   financeiro: 'Fluxo de caixa, DRE e lancamentos manuais',
   lembretes: 'Compromissos a pagar e alertas de vencimento',
   logs: 'Auditoria de acessos do sistema',
-  config: 'Backend PHP, loja online e exportacoes'
+  config: 'Backend PHP, loja online e exportacoes',
+  fornecedores: 'Cadastro de fornecedores e distribuidores'
 };
 
 const ITEM_TYPES = ['Produto', 'Servico'];
 const PAYMENT_METHODS = ['Pix', 'Credito', 'Debito', 'Dinheiro'];
 const PAYMENT_STATUSES = ['Pago', 'Pendente'];
+const DEFAULT_THERMAL_BAUD_RATE = 9600;
+const DEFAULT_THERMAL_MODE = 'text';
+const thermalPrinter = {
+  port: null,
+  connected: false
+};
 
 function qs(selector, scope = document) {
   return scope.querySelector(selector);
@@ -566,6 +588,7 @@ function buildItemRowHtml(item = {}, includeCost = true) {
       <input type="number" step="0.01" min="0" class="item-cost" value="${normalized.custoUnitario}" />
     </label>
   ` : '';
+  const listAttr = normalized.tipo === 'Produto' ? 'list="product-datalist"' : '';
   return `
     <div class="builder-row item-row" data-row-id="${escapeHtml(normalized.id)}">
       <input type="hidden" class="row-id" value="${escapeHtml(normalized.id)}" />
@@ -575,7 +598,7 @@ function buildItemRowHtml(item = {}, includeCost = true) {
         </select>
       </label>
       <label>Titulo
-        <input type="text" class="item-title" value="${escapeHtml(normalized.titulo)}" placeholder="Ex: Alianca ouro 18k" />
+        <input type="text" class="item-title" value="${escapeHtml(normalized.titulo)}" placeholder="Ex: Alianca ouro 18k" ${listAttr} autocomplete="off" />
       </label>
       <label>Descricao
         <input type="text" class="item-description" value="${escapeHtml(normalized.descricao)}" placeholder="Detalhes do item" />
@@ -699,6 +722,39 @@ function renderPaymentsSummary(builder) {
   return summaryData;
 }
 
+function updateProductDatalist() {
+  const dl = document.getElementById('product-datalist');
+  if (!dl) return;
+  dl.innerHTML = (state.data.produtos || [])
+    .filter((p) => p.status !== 'archived')
+    .map((p) => `<option value="${escapeHtml(p.name)}" data-price="${p.price}" data-cost="${p.cost || 0}" data-sku="${escapeHtml(p.sku || '')}">`)
+    .join('');
+}
+
+function onItemTitleChange(row) {
+  const titleInput = qs('.item-title', row);
+  const typeSelect  = qs('.item-type', row);
+  if (!titleInput || !typeSelect || typeSelect.value !== 'Produto') return;
+  const chosen = (state.data.produtos || []).find((p) => p.name === titleInput.value);
+  if (!chosen) return;
+  const priceInput = qs('.item-price', row);
+  const costInput  = qs('.item-cost', row);
+  if (priceInput && (!priceInput.value || Number(priceInput.value) === 0)) priceInput.value = chosen.price || 0;
+  if (costInput  && (!costInput.value  || Number(costInput.value)  === 0)) costInput.value  = chosen.cost  || 0;
+}
+
+function setItemTitleList(row, isProduct) {
+  const titleInput = qs('.item-title', row);
+  if (!titleInput) return;
+  if (isProduct) {
+    titleInput.setAttribute('list', 'product-datalist');
+    titleInput.placeholder = 'Buscar produto cadastrado ou digitar';
+  } else {
+    titleInput.removeAttribute('list');
+    titleInput.placeholder = 'Ex: Servico personalizado';
+  }
+}
+
 function initItemsBuilder(builder) {
   if (!builder || builder.dataset.ready === '1') return;
   const list = getBuilderList(builder);
@@ -730,7 +786,20 @@ function initItemsBuilder(builder) {
       renderPaymentsSummary(qs('.payments-builder[data-builder-kind="venda"]', builder.closest('form') || builder.closest('.drawer-content') || document));
     }
   });
-  builder.addEventListener('input', () => {
+  /* Handle type change → toggle datalist, and title selection → auto-fill price/cost */
+  builder.addEventListener('change', (event) => {
+    const typeSelect = event.target.closest('.item-type');
+    if (typeSelect) {
+      const row = typeSelect.closest('.item-row');
+      if (row) setItemTitleList(row, typeSelect.value === 'Produto');
+    }
+    const titleInput = event.target.closest('.item-title');
+    if (titleInput) {
+      const row = titleInput.closest('.item-row');
+      if (row) onItemTitleChange(row);
+    }
+  });
+  builder.addEventListener('input', (event) => {
     renderItemsSummary(builder);
     renderPaymentsSummary(qs('.payments-builder[data-builder-kind="venda"]', builder.closest('form') || builder.closest('.drawer-content') || document));
   });
@@ -1259,6 +1328,7 @@ async function loadAllData() {
       lembretes: data?.lembretes || [],
       categorias: data?.categorias || [],
       produtos: data?.produtos || [],
+      fornecedores: data?.fornecedores || [],
       inventoryMovements: data?.inventoryMovements || [],
       pedidos: data?.pedidos || []
     };
@@ -1391,11 +1461,14 @@ function renderAll() {
   renderLembretes(true);
   renderLogs();
   renderProducts();
+  renderFornecedores();
   renderInventoryMovements();
   renderOrders();
   renderDashboard();
   renderClienteOptions();
   renderProductOptions();
+  updateProductDatalist();
+  updateSupplierDatalist();
 }
 
 function renderClientes() {
@@ -1412,14 +1485,150 @@ function renderClientes() {
     .map((cliente) => `
       <tr>
         <td data-label="Data">${formatDateShort(cliente.dataHora)}</td>
-        <td data-label="Nome">${cliente.nome || '-'}</td>
-        <td data-label="Telefone">${cliente.telefone || '-'}</td>
-        <td data-label="Email">${cliente.email || '-'}</td>
-        <td data-label="Empresa">${cliente.empresa || '-'}</td>
-        <td data-label="CPF/CNPJ">${cliente.cpfCNPJ || '-'}</td>
-        <td data-label="Obs">${cliente.obs || '-'}</td>
+        <td data-label="Nome">${escapeHtml(cliente.nome || '-')}</td>
+        <td data-label="Telefone">${escapeHtml(cliente.telefone || '-')}</td>
+        <td data-label="Email">${escapeHtml(cliente.email || '-')}</td>
+        <td data-label="Empresa">${escapeHtml(cliente.empresa || '-')}</td>
+        <td data-label="CPF/CNPJ">${escapeHtml(cliente.cpfCNPJ || '-')}</td>
+        <td data-label="Obs">${escapeHtml(cliente.obs || '-')}</td>
+        <td data-label="Acoes">
+          <button class="btn btn-ghost action-btn" data-action="edit-cliente" data-id="${cliente.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+        </td>
       </tr>
     `)
+    .join('');
+}
+
+function fillClienteForm(cliente) {
+  if (!dom.clienteForm) return;
+  dom.clienteForm.querySelector('[name="id"]').value = cliente.id || '';
+  dom.clienteForm.querySelector('[name="nome"]').value = cliente.nome || '';
+  dom.clienteForm.querySelector('[name="telefone"]').value = cliente.telefone || '';
+  dom.clienteForm.querySelector('[name="email"]').value = cliente.email || '';
+  dom.clienteForm.querySelector('[name="empresa"]').value = cliente.empresa || '';
+  dom.clienteForm.querySelector('[name="cpfCNPJ"]').value = cliente.cpfCNPJ || '';
+  dom.clienteForm.querySelector('[name="obs"]').value = cliente.obs || '';
+}
+
+function handleClienteActions(event) {
+  const btn = event.target.closest('button');
+  if (!btn || btn.dataset.action !== 'edit-cliente') return;
+  const cliente = (state.data.clientes || []).find((c) => Number(c.id) === Number(btn.dataset.id));
+  if (cliente) fillClienteForm(cliente);
+}
+
+/* ── FORNECEDORES ─────────────────────────────────── */
+function renderFornecedores() {
+  if (!dom.fornecedorTable) return;
+  const search = dom.fornecedorSearch?.value?.toLowerCase() || '';
+  const rows = (state.data.fornecedores || []).filter((f) => {
+    if (!search) return true;
+    return (
+      String(f.nome).toLowerCase().includes(search) ||
+      String(f.contactPerson || '').toLowerCase().includes(search) ||
+      String(f.document || '').toLowerCase().includes(search) ||
+      String(f.email || '').toLowerCase().includes(search)
+    );
+  });
+
+  dom.fornecedorTable.innerHTML = rows.length === 0
+    ? `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">Nenhum fornecedor cadastrado.</td></tr>`
+    : rows.map((f) => {
+      const rawPhone = (f.phone || '').replace(/\D/g, '');
+      const waHref = rawPhone ? `https://wa.me/${rawPhone}` : '';
+      const callHref = f.phone ? `tel:${f.phone}` : '';
+      return `
+      <tr>
+        <td data-label="Nome">
+          ${f.logoUrl ? `<img src="${escapeHtml(f.logoUrl)}" alt="" style="width:30px;height:30px;border-radius:4px;object-fit:contain;vertical-align:middle;margin-right:6px;border:1px solid var(--border);">` : ''}
+          <strong>${escapeHtml(f.nome || '-')}</strong>
+        </td>
+        <td data-label="Contato">${escapeHtml(f.contactPerson || '-')}</td>
+        <td data-label="Telefone">${escapeHtml(f.phone || '-')}</td>
+        <td data-label="E-mail">${escapeHtml(f.email || '-')}</td>
+        <td data-label="CNPJ/CPF">${escapeHtml(f.document || '-')}</td>
+        <td data-label="Status">
+          <span class="chip ${f.isActive ? 'chip-green' : 'chip-neutral'}">${f.isActive ? 'Ativo' : 'Inativo'}</span>
+        </td>
+        <td data-label="Acoes">
+          ${waHref ? `<a href="${escapeHtml(waHref)}" target="_blank" rel="noopener" class="btn btn-ghost action-btn" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>` : ''}
+          ${callHref ? `<a href="${escapeHtml(callHref)}" class="btn btn-ghost action-btn" title="Ligar"><i class="fa-solid fa-phone"></i></a>` : ''}
+          <button class="btn btn-ghost action-btn" data-action="edit-fornecedor" data-id="${f.id}" title="Editar">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+    }).join('');
+}
+
+function fillFornecedorForm(f) {
+  if (!dom.fornecedorForm) return;
+  dom.fornecedorForm.querySelector('[name="id"]').value = f.id || '';
+  dom.fornecedorForm.querySelector('[name="nome"]').value = f.nome || '';
+  dom.fornecedorForm.querySelector('[name="document"]').value = f.document || '';
+  dom.fornecedorForm.querySelector('[name="contactPerson"]').value = f.contactPerson || '';
+  dom.fornecedorForm.querySelector('[name="phone"]').value = f.phone || '';
+  dom.fornecedorForm.querySelector('[name="email"]').value = f.email || '';
+  dom.fornecedorForm.querySelector('[name="notes"]').value = f.notes || '';
+  dom.fornecedorForm.querySelector('[name="isActive"]').checked = f.isActive !== false;
+  const logoUrlEl  = document.getElementById('fornecedor-logo-url');
+  const logoPreview = document.getElementById('fornecedor-logo-preview');
+  const logoImg    = document.getElementById('fornecedor-logo-preview-img');
+  if (logoUrlEl) logoUrlEl.value = f.logoUrl || '';
+  if (logoPreview && logoImg) {
+    if (f.logoUrl) { logoImg.src = f.logoUrl; logoPreview.style.display = 'flex'; }
+    else { logoPreview.style.display = 'none'; }
+  }
+}
+
+function handleFornecedorActions(event) {
+  const btn = event.target.closest('button');
+  if (!btn || btn.dataset.action !== 'edit-fornecedor') return;
+  const f = (state.data.fornecedores || []).find((x) => Number(x.id) === Number(btn.dataset.id));
+  if (f) fillFornecedorForm(f);
+}
+
+function buildFornecedorPayload(form) {
+  const fd = new FormData(form);
+  return {
+    id: fd.get('id') || '',
+    nome: fd.get('nome') || '',
+    document: fd.get('document') || '',
+    contactPerson: fd.get('contactPerson') || '',
+    phone: fd.get('phone') || '',
+    email: fd.get('email') || '',
+    notes: fd.get('notes') || '',
+    isActive: fd.get('isActive') === 'on',
+    logoUrl: fd.get('logoUrl') || ''
+  };
+}
+
+async function handleFornecedorSubmit(event) {
+  event.preventDefault();
+  const payload = buildFornecedorPayload(event.target);
+  if (!payload.nome) {
+    showToast('Informe o nome do fornecedor.', 'error');
+    return;
+  }
+  try {
+    await apiRequest(payload.id ? 'updateFornecedor' : 'createFornecedor', payload);
+    dom.fornecedorForm.reset();
+    dom.fornecedorForm.querySelector('[name="id"]').value = '';
+    const lp = document.getElementById('fornecedor-logo-preview');
+    if (lp) lp.style.display = 'none';
+    await loadAllData();
+    showToast('Fornecedor salvo.');
+  } catch (error) {
+    showToast(error.message || 'Erro ao salvar fornecedor', 'error');
+  }
+}
+
+function updateSupplierDatalist() {
+  if (!dom.supplierDatalist) return;
+  dom.supplierDatalist.innerHTML = (state.data.fornecedores || [])
+    .filter((f) => f.isActive !== false)
+    .map((f) => `<option value="${escapeHtml(f.nome)}"></option>`)
     .join('');
 }
 
@@ -2434,6 +2643,677 @@ async function generatePdfBlob(html) {
   return blob;
 }
 
+function supportsWebSerial() {
+  return Boolean(navigator.serial && window.isSecureContext);
+}
+
+function getThermalBaudRate() {
+  return Number(dom.thermalBaud?.value || localStorage.getItem(STORAGE_KEYS.thermalBaudRate) || DEFAULT_THERMAL_BAUD_RATE);
+}
+
+function getThermalMode() {
+  const mode = dom.thermalMode?.value || localStorage.getItem(STORAGE_KEYS.thermalMode) || DEFAULT_THERMAL_MODE;
+  return mode === 'visual' ? 'visual' : 'text';
+}
+
+function updateThermalStatus(message, ok = false) {
+  if (!dom.thermalStatus) return;
+  if (message) {
+    dom.thermalStatus.textContent = message;
+  } else if (!navigator.serial) {
+    dom.thermalStatus.textContent = 'Web Serial nao esta disponivel neste navegador. Use Chrome/Edge em HTTPS.';
+  } else if (!window.isSecureContext) {
+    dom.thermalStatus.textContent = 'Web Serial exige HTTPS ou localhost. Na Hostinger, use o dominio com HTTPS.';
+  } else if (thermalPrinter.connected) {
+    dom.thermalStatus.textContent = `Bematech conectada em ${getThermalBaudRate()} baud.`;
+  } else {
+    dom.thermalStatus.textContent = 'Bematech ainda nao conectada. Clique em Conectar Bematech.';
+  }
+  dom.thermalStatus.dataset.status = ok ? 'ok' : 'warn';
+}
+
+function restoreThermalSettings() {
+  if (dom.thermalBaud) {
+    dom.thermalBaud.value = String(localStorage.getItem(STORAGE_KEYS.thermalBaudRate) || DEFAULT_THERMAL_BAUD_RATE);
+  }
+  if (dom.thermalMode) {
+    dom.thermalMode.value = localStorage.getItem(STORAGE_KEYS.thermalMode) || DEFAULT_THERMAL_MODE;
+  }
+  updateThermalStatus();
+}
+
+async function connectThermalPrinter(requestPermission = true) {
+  if (!supportsWebSerial()) {
+    updateThermalStatus();
+    showToast('Web Serial exige Chrome/Edge em HTTPS ou localhost.', 'error');
+    return false;
+  }
+
+  try {
+    const baudRate = getThermalBaudRate();
+    let port = thermalPrinter.port;
+    if (!port && !requestPermission) {
+      const ports = await navigator.serial.getPorts();
+      port = ports[0] || null;
+    }
+    if (!port && requestPermission) {
+      port = await navigator.serial.requestPort();
+    }
+    if (!port) {
+      updateThermalStatus('Nenhuma Bematech autorizada ainda.', false);
+      return false;
+    }
+
+    if (!port.writable) {
+      await port.open({
+        baudRate,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none'
+      });
+    }
+
+    thermalPrinter.port = port;
+    thermalPrinter.connected = true;
+    localStorage.setItem(STORAGE_KEYS.thermalBaudRate, String(baudRate));
+    updateThermalStatus('', true);
+    return true;
+  } catch (error) {
+    thermalPrinter.connected = false;
+    const message = error?.name === 'NotFoundError'
+      ? 'Conexao cancelada. Selecione a porta USB/serial da Bematech.'
+      : `Nao foi possivel conectar a Bematech: ${error.message || error}`;
+    updateThermalStatus(message, false);
+    showToast(message, 'error');
+    return false;
+  }
+}
+
+async function disconnectThermalPrinter() {
+  try {
+    if (thermalPrinter.port) {
+      await thermalPrinter.port.close();
+    }
+  } catch (error) {
+    console.warn(error);
+  } finally {
+    thermalPrinter.port = null;
+    thermalPrinter.connected = false;
+    updateThermalStatus('Bematech desconectada.', false);
+  }
+}
+
+function printerText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E\n\r]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function thermalLine(char = '-') {
+  return char.repeat(42);
+}
+
+function centerThermalText(value) {
+  const text = printerText(value).slice(0, 42);
+  const left = Math.max(Math.floor((42 - text.length) / 2), 0);
+  return `${' '.repeat(left)}${text}`;
+}
+
+function wrapThermalText(value, width = 42) {
+  const words = printerText(value).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  words.forEach((word) => {
+    if (!line) {
+      line = word;
+      return;
+    }
+    if ((line.length + word.length + 1) <= width) {
+      line += ` ${word}`;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : ['-'];
+}
+
+function twoColumnThermal(left, right, width = 42) {
+  const l = printerText(left);
+  const r = printerText(right);
+  const available = Math.max(width - r.length - 1, 1);
+  return `${l.slice(0, available).padEnd(available, ' ')} ${r}`;
+}
+
+function buildThermalItensLines(items = []) {
+  if (!items.length) {
+    return ['Sem itens'];
+  }
+
+  const lines = [];
+  items.forEach((item, index) => {
+    const itemNumber = String(index + 1).padStart(2, '0');
+    wrapThermalText(item.titulo || 'Item', 39).forEach((line, lineIndex) => {
+      lines.push(lineIndex === 0 ? `${itemNumber} ${line}`.slice(0, 42) : `   ${line}`.slice(0, 42));
+    });
+    const qty = Number(item.quantidade || 1).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    const unit = formatCurrency(item.valorUnitario || 0);
+    const total = formatCurrency((item.quantidade || 1) * (item.valorUnitario || 0));
+    lines.push(twoColumnThermal(`${qty} x ${unit}`, total));
+    lines.push(thermalLine('.'));
+  });
+  if (lines.at(-1) === thermalLine('.')) {
+    lines.pop();
+  }
+  return lines;
+}
+
+function buildThermalVendaText(venda) {
+  const metrics = getVendaMetrics(venda);
+  const lines = [
+    centerThermalText('GAO JOIAS'),
+    centerThermalText('Joias e atendimento personalizado'),
+    centerThermalText('DOCUMENTO NAO FISCAL'),
+    thermalLine('='),
+    centerThermalText(`CUPOM DE VENDA #${printerText(venda.numero || '-')}`),
+    thermalLine('='),
+    twoColumnThermal('Data', printerText(formatDateShort(venda.dataHora))),
+    twoColumnThermal('Cliente', printerText(venda.cliente || '-')),
+    twoColumnThermal('Pagamento', printerText(metrics.pgtoResumo || '-')),
+    twoColumnThermal('Status', printerText(metrics.statusRecebimento || '-')),
+    thermalLine('-'),
+    'ITENS',
+    ...buildThermalItensLines(metrics.items),
+    thermalLine('-'),
+    centerThermalText(`TOTAL ${formatCurrency(metrics.valor)}`),
+    twoColumnThermal('Recebido', formatCurrency(metrics.recebido)),
+    twoColumnThermal('Saldo', formatCurrency(metrics.saldo)),
+  ];
+
+  if (metrics.payments?.length) {
+    lines.push(thermalLine(), 'RECEBIMENTOS');
+    metrics.payments.forEach((payment) => {
+      lines.push(twoColumnThermal(payment.descricao || payment.forma || 'Pagamento', formatCurrency(payment.valor || 0)));
+      lines.push(`  ${printerText(payment.forma || '-')} | ${printerText(payment.status || '-')}`);
+    });
+  }
+
+  if (venda.obs) {
+    lines.push(thermalLine(), 'OBSERVACOES');
+    lines.push(...wrapThermalText(venda.obs));
+  }
+
+  lines.push(
+    thermalLine('='),
+    centerThermalText('Obrigado pela preferencia!'),
+    centerThermalText('WhatsApp (19) 98968-9260'),
+    centerThermalText('GAO Joias'),
+    '\n\n'
+  );
+  return `${lines.join('\n')}\n`;
+}
+
+function buildThermalOrcamentoText(orcamento) {
+  const metrics = getOrcamentoMetrics(orcamento);
+  const lines = [
+    centerThermalText('GAO JOIAS'),
+    centerThermalText('Joias e atendimento personalizado'),
+    centerThermalText('ORCAMENTO'),
+    thermalLine('='),
+    centerThermalText(`ORCAMENTO #${printerText(orcamento.numero || '-')}`),
+    thermalLine('='),
+    twoColumnThermal('Data', printerText(formatDateShort(orcamento.dataHora))),
+    twoColumnThermal('Cliente', printerText(orcamento.cliente || '-')),
+    twoColumnThermal('Validade', printerText(orcamento.validade || '-')),
+    twoColumnThermal('Status', printerText(orcamento.status || '-')),
+    thermalLine('-'),
+    'ITENS',
+    ...buildThermalItensLines(metrics.items),
+    thermalLine('-'),
+    centerThermalText(`TOTAL ${formatCurrency(metrics.valor)}`),
+  ];
+
+  if (orcamento.obsPublic) {
+    lines.push(thermalLine(), 'OBSERVACOES');
+    lines.push(...wrapThermalText(orcamento.obsPublic));
+  }
+
+  lines.push(
+    thermalLine('='),
+    centerThermalText('Documento nao fiscal'),
+    centerThermalText('WhatsApp (19) 98968-9260'),
+    '\n\n'
+  );
+  return `${lines.join('\n')}\n`;
+}
+
+function escposText(text = '') {
+  return new TextEncoder().encode(`${text}\n`);
+}
+
+function escposCommand(...bytes) {
+  return new Uint8Array(bytes);
+}
+
+function escposAlign(position = 'left') {
+  const alignments = { left: 0, center: 1, right: 2 };
+  return escposCommand(0x1b, 0x61, alignments[position] ?? 0);
+}
+
+function escposBold(active) {
+  return escposCommand(0x1b, 0x45, active ? 1 : 0);
+}
+
+function escposSize(width = 0, height = 0) {
+  return escposCommand(0x1d, 0x21, ((width & 0x07) << 4) | (height & 0x07));
+}
+
+function escposFeed(lines = 1) {
+  return escposCommand(0x1b, 0x64, lines);
+}
+
+function appendEscposLine(commands, line, options = {}) {
+  const align = options.align || 'left';
+  commands.push(
+    escposAlign(align),
+    escposBold(Boolean(options.bold)),
+    escposSize(options.double ? 1 : 0, options.double ? 1 : 0),
+    escposText(line),
+    escposSize(0, 0),
+    escposBold(false),
+    escposAlign('left')
+  );
+}
+
+function escposPayload(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const commands = [
+    new Uint8Array([0x1b, 0x40]),
+    new Uint8Array([0x1b, 0x33, 0x18])
+  ];
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      commands.push(escposText(''));
+      return;
+    }
+
+    if (trimmed === 'GAO JOIAS') {
+      appendEscposLine(commands, trimmed, { align: 'center', bold: true, double: true });
+      return;
+    }
+
+    if (
+      trimmed === 'DOCUMENTO NAO FISCAL'
+      || trimmed === 'ORCAMENTO'
+      || trimmed.startsWith('CUPOM DE VENDA #')
+      || trimmed.startsWith('ORCAMENTO #')
+    ) {
+      appendEscposLine(commands, trimmed, { align: 'center', bold: true });
+      return;
+    }
+
+    if (/^[=\-.]{8,}$/.test(trimmed)) {
+      appendEscposLine(commands, line, { align: 'center' });
+      return;
+    }
+
+    if (['ITENS', 'RECEBIMENTOS', 'OBSERVACOES'].includes(trimmed)) {
+      appendEscposLine(commands, trimmed, { bold: true });
+      return;
+    }
+
+    if (trimmed.startsWith('TOTAL ')) {
+      appendEscposLine(commands, trimmed, { align: 'center', bold: true, double: true });
+      return;
+    }
+
+    if (trimmed.startsWith('Obrigado') || trimmed.startsWith('WhatsApp') || trimmed === 'GAO Joias') {
+      appendEscposLine(commands, trimmed, { align: 'center', bold: trimmed === 'Obrigado pela preferencia!' });
+      return;
+    }
+
+    appendEscposLine(commands, line);
+  });
+
+  commands.push(
+    escposFeed(3),
+    new Uint8Array([0x1d, 0x56, 0x42, 0x00])
+  );
+
+  const total = commands.reduce((sum, command) => sum + command.length, 0);
+  const payload = new Uint8Array(total);
+  let offset = 0;
+  commands.forEach((command) => {
+    payload.set(command, offset);
+    offset += command.length;
+  });
+  return payload;
+}
+
+async function printThermalText(text, label = 'cupom') {
+  const connected = await connectThermalPrinter(!thermalPrinter.port);
+  if (!connected || !thermalPrinter.port?.writable) {
+    return;
+  }
+
+  const writer = thermalPrinter.port.writable.getWriter();
+  try {
+    await writeSerialBytes(writer, escposPayload(text));
+    showToast(`Impressao ${label} enviada para a Bematech.`);
+  } catch (error) {
+    thermalPrinter.connected = false;
+    updateThermalStatus('Falha ao enviar dados para a Bematech.', false);
+    showToast(error.message || 'Falha ao imprimir na Bematech.', 'error');
+  } finally {
+    writer.releaseLock();
+  }
+}
+
+async function writeSerialBytes(writer, payload, chunkSize = 4096) {
+  for (let offset = 0; offset < payload.length; offset += chunkSize) {
+    await writer.write(payload.slice(offset, offset + chunkSize));
+  }
+}
+
+function thermalRasterCss() {
+  return `
+    .thermal-raster-root {
+      width: 576px;
+      background: #fff;
+      color: #111;
+      font-family: Poppins, Arial, sans-serif;
+    }
+    .thermal-raster-root .doc {
+      width: 576px !important;
+      max-width: 576px !important;
+      margin: 0 !important;
+      padding: 28px !important;
+      border: 1px solid #dddddd !important;
+      border-radius: 16px !important;
+      background: #fff !important;
+      box-shadow: none !important;
+      color: #111 !important;
+    }
+    .thermal-raster-root .doc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid #d8d8d8;
+      padding-bottom: 14px;
+    }
+    .thermal-raster-root .brand-block {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .thermal-raster-root .doc-header img {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+    }
+    .thermal-raster-root .doc-title {
+      color: #555;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .thermal-raster-root .doc-number {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .thermal-raster-root .doc-meta {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .thermal-raster-root .doc-meta div {
+      border: 1px solid #e3e3e3;
+      border-radius: 10px;
+      background: #f6f6f6;
+      padding: 10px;
+    }
+    .thermal-raster-root .doc-meta span {
+      display: block;
+      color: #666;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+    .thermal-raster-root .doc-meta strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 15px;
+    }
+    .thermal-raster-root .doc-section {
+      margin-top: 16px;
+      display: grid;
+      gap: 8px;
+    }
+    .thermal-raster-root .doc h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .thermal-raster-root .doc p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .thermal-raster-root .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+    .thermal-raster-root .doc-table th {
+      border-bottom: 1px solid #222;
+      color: #444;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 7px 4px;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    .thermal-raster-root .doc-table td {
+      border-bottom: 1px dashed #cfcfcf;
+      font-size: 14px;
+      padding: 9px 4px;
+      vertical-align: top;
+    }
+    .thermal-raster-root .doc-table th:last-child,
+    .thermal-raster-root .doc-table td:last-child {
+      text-align: right;
+    }
+    .thermal-raster-root .doc-total {
+      margin-top: 16px;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .thermal-raster-root .total-box {
+      min-width: 230px;
+      border-radius: 12px;
+      background: #111;
+      color: #fff;
+      padding: 14px 16px;
+      text-align: right;
+    }
+    .thermal-raster-root .total-box span {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .6px;
+      opacity: .8;
+      text-transform: uppercase;
+    }
+    .thermal-raster-root .total-box strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 24px;
+      font-weight: 900;
+    }
+    .thermal-raster-root .doc-footer {
+      margin-top: 18px;
+      border-top: 1px solid #d8d8d8;
+      padding-top: 12px;
+      color: #444;
+      font-size: 13px;
+      text-align: center;
+    }
+  `;
+}
+
+function waitForImages(scope) {
+  const images = Array.from(scope.querySelectorAll('img'));
+  return Promise.all(images.map((image) => {
+    if (image.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      image.onload = resolve;
+      image.onerror = resolve;
+    });
+  }));
+}
+
+async function renderThermalHtmlCanvas(html) {
+  if (typeof html2canvas !== 'function') {
+    throw new Error('Biblioteca html2canvas indisponivel.');
+  }
+
+  const host = document.createElement('div');
+  host.style.position = 'fixed';
+  host.style.left = '-10000px';
+  host.style.top = '0';
+  host.style.width = '576px';
+  host.style.background = '#fff';
+  host.style.zIndex = '-1';
+  host.className = 'thermal-raster-root';
+  host.innerHTML = `<style>${thermalRasterCss()}</style>${html}`;
+  document.body.appendChild(host);
+
+  try {
+    await document.fonts?.ready;
+    await waitForImages(host);
+    const target = host.querySelector('.doc') || host;
+    return await html2canvas(target, {
+      backgroundColor: '#ffffff',
+      scale: 1,
+      width: 576,
+      windowWidth: 576,
+      useCORS: true
+    });
+  } finally {
+    host.remove();
+  }
+}
+
+function canvasToEscposRaster(canvas) {
+  const width = Math.min(576, canvas.width);
+  const height = canvas.height;
+  const ctx = canvas.getContext('2d');
+  const pixels = ctx.getImageData(0, 0, width, height).data;
+  const widthBytes = Math.ceil(width / 8);
+  const imageData = new Uint8Array(widthBytes * height);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourceIndex = ((y * canvas.width) + x) * 4;
+      const red = pixels[sourceIndex];
+      const green = pixels[sourceIndex + 1];
+      const blue = pixels[sourceIndex + 2];
+      const alpha = pixels[sourceIndex + 3];
+      const luminance = (red * 0.299) + (green * 0.587) + (blue * 0.114);
+      const isBlack = alpha > 80 && luminance < 178;
+      if (isBlack) {
+        const byteIndex = (y * widthBytes) + Math.floor(x / 8);
+        imageData[byteIndex] |= 0x80 >> (x % 8);
+      }
+    }
+  }
+
+  const header = new Uint8Array([
+    0x1d, 0x76, 0x30, 0x00,
+    widthBytes & 0xff,
+    (widthBytes >> 8) & 0xff,
+    height & 0xff,
+    (height >> 8) & 0xff
+  ]);
+  const commands = [
+    escposCommand(0x1b, 0x40),
+    escposCommand(0x1b, 0x33, 0x18),
+    header,
+    imageData,
+    escposFeed(3),
+    escposCommand(0x1d, 0x56, 0x42, 0x00)
+  ];
+  const total = commands.reduce((sum, command) => sum + command.length, 0);
+  const payload = new Uint8Array(total);
+  let offset = 0;
+  commands.forEach((command) => {
+    payload.set(command, offset);
+    offset += command.length;
+  });
+  return payload;
+}
+
+async function printThermalHtml(html, label = 'cupom', fallbackText = '') {
+  const connected = await connectThermalPrinter(!thermalPrinter.port);
+  if (!connected || !thermalPrinter.port?.writable) {
+    return;
+  }
+
+  setLoading(true);
+  let payload;
+  try {
+    const canvas = await renderThermalHtmlCanvas(html);
+    payload = canvasToEscposRaster(canvas);
+  } catch (error) {
+    console.warn(error);
+    if (!fallbackText) {
+      showToast('Nao foi possivel renderizar a nota visual para a Bematech.', 'error');
+      setLoading(false);
+      return;
+    }
+    payload = escposPayload(fallbackText);
+  }
+
+  const writer = thermalPrinter.port.writable.getWriter();
+  try {
+    await writeSerialBytes(writer, payload);
+    showToast(`Impressao visual ${label} enviada para a Bematech.`);
+  } catch (error) {
+    thermalPrinter.connected = false;
+    updateThermalStatus('Falha ao enviar dados para a Bematech.', false);
+    showToast(error.message || 'Falha ao imprimir na Bematech.', 'error');
+  } finally {
+    writer.releaseLock();
+    setLoading(false);
+  }
+}
+
+function printThermalVenda(venda) {
+  if (getThermalMode() === 'visual') {
+    return printThermalHtml(buildVendaDoc(venda, true), 'da venda', buildThermalVendaText(venda));
+  }
+  return printThermalText(buildThermalVendaText(venda), 'da venda');
+}
+
+function printThermalOrcamento(orcamento) {
+  if (getThermalMode() === 'visual') {
+    return printThermalHtml(buildOrcamentoDoc(orcamento), 'do orcamento', buildThermalOrcamentoText(orcamento));
+  }
+  return printThermalText(buildThermalOrcamentoText(orcamento), 'do orcamento');
+}
+
 function printHtml(html, thermal = false) {
   const win = window.open('', '_blank');
   if (!win) {
@@ -2532,7 +3412,7 @@ function handleOrcamentoActions(event) {
     `);
     qs('#modal-pdf').addEventListener('click', () => generatePdf(docHtml, `orcamento-${orcamento.numero}.pdf`));
     qs('#modal-print').addEventListener('click', () => printHtml(docHtml));
-    qs('#modal-thermal').addEventListener('click', () => printHtml(docHtml, true));
+    qs('#modal-thermal').addEventListener('click', () => printThermalOrcamento(orcamento));
     qs('#modal-close').addEventListener('click', closeModal);
     return;
   }
@@ -2684,7 +3564,7 @@ function handleVendaActions(event) {
     `);
     qs('#modal-pdf').addEventListener('click', () => generatePdf(docHtml, `nota-${venda.numero}.pdf`));
     qs('#modal-print').addEventListener('click', () => printHtml(docHtml));
-    qs('#modal-thermal').addEventListener('click', () => printHtml(buildVendaDoc(venda, true), true));
+    qs('#modal-thermal').addEventListener('click', () => printThermalVenda(venda));
     qs('#modal-close').addEventListener('click', closeModal);
   }
 
@@ -2764,7 +3644,9 @@ function openVendaEditor(venda) {
 async function handleClienteSubmit(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
+  const id = formData.get('id') || '';
   const payload = {
+    id: id ? Number(id) : undefined,
     dataHora: nowIso(),
     nome: formData.get('nome') || '',
     telefone: formData.get('telefone') || '',
@@ -2775,11 +3657,20 @@ async function handleClienteSubmit(event) {
   };
 
   try {
-    const cliente = await apiRequest('createCliente', payload);
-    state.data.clientes.unshift(cliente);
-    event.target.reset();
-    renderAll();
-    showToast('Cliente cadastrado.');
+    if (id) {
+      const updated = await apiRequest('updateCliente', payload);
+      const idx = state.data.clientes.findIndex((c) => Number(c.id) === Number(id));
+      if (idx !== -1) state.data.clientes[idx] = updated; else state.data.clientes.unshift(updated);
+      event.target.reset();
+      renderAll();
+      showToast('Cliente atualizado.');
+    } else {
+      const cliente = await apiRequest('createCliente', payload);
+      state.data.clientes.unshift(cliente);
+      event.target.reset();
+      renderAll();
+      showToast('Cliente cadastrado.');
+    }
   } catch (error) {
     showToast(error.message || 'Erro ao salvar cliente', 'error');
   }
@@ -2976,23 +3867,53 @@ async function handleVendaSubmit(event) {
 
 function buildProductPayload(form) {
   const formData = new FormData(form);
+  const imageUrls = formData.getAll('imageUrls[]').filter((u) => u && String(u).trim() !== '');
   return {
     id: formData.get('id') || '',
     sku: formData.get('sku') || '',
     name: formData.get('name') || '',
     categoryName: formData.get('categoryName') || '',
+    supplierName: formData.get('supplierName') || '',
     status: formData.get('status') || 'draft',
     productType: 'physical',
     price: parseNumber(formData.get('price')),
     cost: formData.get('cost') === '' ? '' : parseNumber(formData.get('cost')),
     stockQty: Number(formData.get('stockQty') || 0),
     lowStockThreshold: Number(formData.get('lowStockThreshold') || 2),
-    imageUrl: formData.get('imageUrl') || '',
+    imageUrl: imageUrls[0] || '',
+    imageUrls: imageUrls,
     shortDescription: formData.get('shortDescription') || '',
     description: formData.get('description') || '',
     trackStock: formData.get('trackStock') === 'on',
     allowBackorder: formData.get('allowBackorder') === 'on'
   };
+}
+
+function clearProductPhotos(form) {
+  const slots = form ? form.querySelectorAll('.photo-slot') : [];
+  slots.forEach((slot) => {
+    const preview  = slot.querySelector('.photo-slot-preview');
+    const urlInput = slot.querySelector('.photo-url-input');
+    const fileInput= slot.querySelector('.photo-file-input');
+    if (preview)  { preview.style.display = 'none'; const img = preview.querySelector('img'); if (img) img.src = ''; }
+    if (urlInput) urlInput.value = '';
+    if (fileInput) fileInput.value = '';
+  });
+}
+
+function fillProductPhotos(form, imageUrls) {
+  clearProductPhotos(form);
+  const slots = form ? form.querySelectorAll('.photo-slot') : [];
+  (imageUrls || []).forEach((url, i) => {
+    if (!url || i >= slots.length) return;
+    const slot     = slots[i];
+    const preview  = slot.querySelector('.photo-slot-preview');
+    const img      = slot.querySelector('.photo-slot-preview img');
+    const urlInput = slot.querySelector('.photo-url-input');
+    if (urlInput) urlInput.value = url;
+    if (img)     img.src = url;
+    if (preview) preview.style.display = 'block';
+  });
 }
 
 function resetProductForm() {
@@ -3004,6 +3925,7 @@ function resetProductForm() {
   dom.productForm.querySelector('[name="lowStockThreshold"]').value = '2';
   const track = dom.productForm.querySelector('[name="trackStock"]');
   if (track) track.checked = true;
+  clearProductPhotos(dom.productForm);
 }
 
 function fillProductForm(product) {
@@ -3012,17 +3934,18 @@ function fillProductForm(product) {
   dom.productForm.querySelector('[name="sku"]').value = product.sku || '';
   dom.productForm.querySelector('[name="name"]').value = product.name || '';
   dom.productForm.querySelector('[name="categoryName"]').value = product.categoryName || '';
+  dom.productForm.querySelector('[name="supplierName"]').value = product.supplierName || '';
   dom.productForm.querySelector('[name="status"]').value = product.status || 'draft';
   dom.productForm.querySelector('[name="price"]').value = product.price || 0;
   dom.productForm.querySelector('[name="cost"]').value = product.cost || '';
   dom.productForm.querySelector('[name="stockQty"]').value = product.stockQty || 0;
   dom.productForm.querySelector('[name="lowStockThreshold"]').value = product.lowStockThreshold || 2;
-  dom.productForm.querySelector('[name="imageUrl"]').value = product.imageUrl || '';
   dom.productForm.querySelector('[name="shortDescription"]').value = product.shortDescription || '';
   dom.productForm.querySelector('[name="description"]').value = product.description || '';
   dom.productForm.querySelector('[name="trackStock"]').checked = Boolean(product.trackStock);
   dom.productForm.querySelector('[name="allowBackorder"]').checked = Boolean(product.allowBackorder);
-  dom.productForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  fillProductPhotos(dom.productForm, product.imageUrls || (product.imageUrl ? [product.imageUrl] : []));
+  /* scrollIntoView removed — form is now in smart modal */
 }
 
 async function handleProductSubmit(event) {
@@ -3139,7 +4062,8 @@ async function handleFinanceiroSubmit(event) {
     vencimento: toIsoFromDateInput(String(formData.get('vencimento') || '')),
     origem: 'Manual',
     referencia: '',
-    obs: formData.get('obs') || ''
+    obs: formData.get('obs') || '',
+    attachmentUrl: formData.get('attachmentUrl') || ''
   };
 
   if (!payload.valor) {
@@ -3160,6 +4084,12 @@ async function handleFinanceiroSubmit(event) {
     if (dom.financeiroForm) {
       const dateInput = dom.financeiroForm.querySelector('input[name="dataHora"]');
       if (dateInput) dateInput.value = toDateTimeLocalValue(nowIso());
+      const attachPrev = dom.financeiroForm.querySelector('#financeiro-attachment-preview');
+      const attachUrl  = dom.financeiroForm.querySelector('#financeiro-attachment-url');
+      const attachIn   = dom.financeiroForm.querySelector('#financeiro-attachment-input');
+      if (attachPrev) attachPrev.style.display = 'none';
+      if (attachUrl)  attachUrl.value = '';
+      if (attachIn)   attachIn.value = '';
     }
     await loadAllData();
     showToast('Lancamento financeiro salvo.');
@@ -3376,6 +4306,14 @@ function handleExport(type) {
 
 function setupEvents() {
   dom.loginForm.addEventListener('submit', handleLogin);
+  dom.profileSelectButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      dom.profileSelectButtons.forEach((node) => node.classList.remove('active'));
+      button.classList.add('active');
+      if (dom.loginUser) dom.loginUser.value = button.dataset.loginUser || '';
+      if (dom.loginPassword) dom.loginPassword.focus();
+    });
+  });
   if (dom.togglePassword && dom.loginPassword) {
     dom.togglePassword.addEventListener('click', () => {
       const isVisible = dom.loginPassword.type === 'text';
@@ -3425,6 +4363,13 @@ function setupEvents() {
   if (dom.inventoryForm) dom.inventoryForm.addEventListener('submit', handleInventorySubmit);
   dom.financeiroForm.addEventListener('submit', handleFinanceiroSubmit);
   dom.lembreteForm.addEventListener('submit', handleLembreteSubmit);
+  if (dom.fornecedorForm) dom.fornecedorForm.addEventListener('submit', handleFornecedorSubmit);
+  if (dom.fornecedorFormReset) dom.fornecedorFormReset.addEventListener('click', () => {
+    dom.fornecedorForm.reset();
+    dom.fornecedorForm.querySelector('[name="id"]').value = '';
+    const lp = document.getElementById('fornecedor-logo-preview');
+    if (lp) lp.style.display = 'none';
+  });
 
   dom.clienteSearch.addEventListener('input', renderClientes);
   dom.orcamentoSearch.addEventListener('input', renderOrcamentos);
@@ -3433,13 +4378,16 @@ function setupEvents() {
   if (dom.orderSearch) dom.orderSearch.addEventListener('input', renderOrders);
   dom.financeiroSearch.addEventListener('input', renderFinanceiro);
   dom.lembreteSearch.addEventListener('input', () => renderLembretes(false));
+  if (dom.fornecedorSearch) dom.fornecedorSearch.addEventListener('input', renderFornecedores);
 
+  dom.clienteTable.addEventListener('click', handleClienteActions);
   dom.orcamentoTable.addEventListener('click', handleOrcamentoActions);
   dom.vendaTable.addEventListener('click', handleVendaActions);
   if (dom.productTable) dom.productTable.addEventListener('click', handleProductActions);
   if (dom.orderTable) dom.orderTable.addEventListener('click', handleOrderActions);
   dom.financeiroTable.addEventListener('click', handleFinanceiroActions);
   dom.lembreteTable.addEventListener('click', handleLembretesActions);
+  if (dom.fornecedorTable) dom.fornecedorTable.addEventListener('click', handleFornecedorActions);
 
   if (dom.dashboardPeriod) {
     dom.dashboardPeriod.addEventListener('click', (event) => {
@@ -3483,9 +4431,41 @@ function setupEvents() {
     const html = buildVendaDoc({ numero: 'TESTE', cliente: 'GAO Joias', produtoServico: 'Teste', dataHora: nowIso(), valor: 0, pgto: 'Pix', obs: '' });
     printHtml(html);
   });
+  if (dom.thermalBaud) {
+    dom.thermalBaud.addEventListener('change', () => {
+      localStorage.setItem(STORAGE_KEYS.thermalBaudRate, String(getThermalBaudRate()));
+      if (thermalPrinter.connected) {
+        updateThermalStatus('Velocidade alterada. Desconecte e conecte novamente para aplicar.', false);
+      }
+    });
+  }
+  if (dom.thermalMode) {
+    dom.thermalMode.addEventListener('change', () => {
+      localStorage.setItem(STORAGE_KEYS.thermalMode, getThermalMode());
+      showToast(getThermalMode() === 'visual'
+        ? 'Bematech configurada para formato visual.'
+        : 'Bematech configurada para formato texto ESC/POS.');
+    });
+  }
+  if (dom.thermalConnect) {
+    dom.thermalConnect.addEventListener('click', () => connectThermalPrinter(true));
+  }
+  if (dom.thermalDisconnect) {
+    dom.thermalDisconnect.addEventListener('click', disconnectThermalPrinter);
+  }
   dom.testThermal.addEventListener('click', () => {
-    const html = buildVendaDoc({ numero: 'TESTE', cliente: 'GAO Joias', produtoServico: 'Teste', dataHora: nowIso(), valor: 0, pgto: 'Pix', obs: '' }, true);
-    printHtml(html, true);
+    printThermalVenda({
+      numero: 'TESTE',
+      cliente: 'GAO Joias',
+      dataHora: nowIso(),
+      valor: 1,
+      valorRecebido: 1,
+      pgto: 'Pix',
+      statusRecebimento: 'Pago',
+      itensJson: JSON.stringify([{ titulo: 'Teste Bematech MP-4200 HS', quantidade: 1, valorUnitario: 1 }]),
+      pagamentosJson: JSON.stringify([{ descricao: 'Teste', valor: 1, forma: 'Pix', status: 'Pago' }]),
+      obs: 'Teste de comunicacao Web Serial.'
+    });
   });
   dom.exportClientes.addEventListener('click', () => handleExport('clientes'));
   dom.exportVendas.addEventListener('click', () => handleExport('vendas'));
@@ -3505,6 +4485,7 @@ function setupEvents() {
 
 async function init() {
   mountStructuredForms();
+  restoreThermalSettings();
   setupEvents();
   loadSidebarState();
   loadTheme();

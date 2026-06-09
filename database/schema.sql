@@ -220,6 +220,7 @@ CREATE TABLE IF NOT EXISTS financial_entries (
   source VARCHAR(80) NOT NULL DEFAULT 'Manual',
   reference VARCHAR(120) NULL,
   notes TEXT NULL,
+  attachment_url VARCHAR(500) NULL,
   created_by BIGINT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -311,8 +312,26 @@ CREATE TABLE IF NOT EXISTS stripe_events (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO admin_users (name, email, password_hash, role)
-SELECT 'Administrador', 'admin@gao.local', '$2y$10$dYU3VBsd.mBKrTEvUNy.YOyK5YH0vN0QSvW7D5FZFm0Eko97DPEua', 'admin'
+SELECT 'Administrador', 'admin@gao.local', '$2y$10$FT5SXEtUa75cMu48i5Otx.HM/.ASIpWopG6DbjJUm1LWV6s1kD/Zu', 'admin'
 WHERE NOT EXISTS (SELECT 1 FROM admin_users WHERE email = 'admin@gao.local');
+
+UPDATE admin_users
+SET name = 'Administrador',
+    password_hash = '$2y$10$FT5SXEtUa75cMu48i5Otx.HM/.ASIpWopG6DbjJUm1LWV6s1kD/Zu',
+    role = 'admin',
+    is_active = 1
+WHERE email = 'admin@gao.local';
+
+INSERT INTO admin_users (name, email, password_hash, role)
+SELECT 'Operador', 'operador@gao.local', '$2y$10$rpk8DFsLydK/S9PLikn/gOKVxSpA0vgv5rai3EgZUA4yKvsyTmi8.', 'operator'
+WHERE NOT EXISTS (SELECT 1 FROM admin_users WHERE email = 'operador@gao.local');
+
+UPDATE admin_users
+SET name = 'Operador',
+    password_hash = '$2y$10$rpk8DFsLydK/S9PLikn/gOKVxSpA0vgv5rai3EgZUA4yKvsyTmi8.',
+    role = 'operator',
+    is_active = 1
+WHERE email = 'operador@gao.local';
 
 INSERT INTO product_categories (name, slug, description, sort_order)
 SELECT 'Joias', 'joias', 'Produtos principais da loja', 10
@@ -321,3 +340,24 @@ WHERE NOT EXISTS (SELECT 1 FROM product_categories WHERE slug = 'joias');
 INSERT INTO product_categories (name, slug, description, sort_order)
 SELECT 'Servicos', 'servicos', 'Servicos e itens personalizados', 20
 WHERE NOT EXISTS (SELECT 1 FROM product_categories WHERE slug = 'servicos');
+
+CREATE TABLE IF NOT EXISTS suppliers (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(180) NOT NULL,
+  email VARCHAR(190) NULL,
+  phone VARCHAR(30) NULL,
+  document VARCHAR(30) NULL COMMENT 'CNPJ ou CPF',
+  contact_person VARCHAR(120) NULL,
+  notes TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  logo_url VARCHAR(500) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_suppliers_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migrations for existing databases
+ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS attachment_url VARCHAR(500) NULL;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier_id BIGINT UNSIGNED NULL AFTER category_id;
+ALTER TABLE products ADD CONSTRAINT IF NOT EXISTS fk_products_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
+ALTER TABLE suppliers ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500) NULL;
