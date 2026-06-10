@@ -135,7 +135,13 @@ const dom = {
   dreResultadoOp: document.getElementById('dre-resultado-op'),
   dreResultadoLiquido: document.getElementById('dre-resultado-liquido'),
   topClientes: document.getElementById('top-clientes'),
-  financeiroResumoList: document.getElementById('financeiro-resumo-list')
+  financeiroResumoList: document.getElementById('financeiro-resumo-list'),
+  importTypeSelect: document.getElementById('import-type-select'),
+  importFileInput: document.getElementById('import-file-input'),
+  importFileNameLabel: document.getElementById('import-file-name-label'),
+  importTemplateBtn: document.getElementById('import-template-btn'),
+  importSubmitBtn: document.getElementById('import-submit-btn'),
+  importResult: document.getElementById('import-result')
 };
 
 const subtitles = {
@@ -149,7 +155,8 @@ const subtitles = {
   lembretes: 'Compromissos a pagar e alertas de vencimento',
   logs: 'Auditoria de acessos do sistema',
   config: 'Backend PHP, loja online e exportacoes',
-  fornecedores: 'Cadastro de fornecedores e distribuidores'
+  fornecedores: 'Cadastro de fornecedores e distribuidores',
+  dados: 'Importar e exportar registros em CSV'
 };
 
 const ITEM_TYPES = ['Produto', 'Servico'];
@@ -4508,5 +4515,89 @@ async function init() {
     console.warn(error);
   }
 }
+
+/* ── Import / Export (Dados) ─────────────────────────────── */
+(function setupImport() {
+  const typeSelect   = dom.importTypeSelect;
+  const fileInput    = dom.importFileInput;
+  const fileLabel    = dom.importFileNameLabel;
+  const templateBtn  = dom.importTemplateBtn;
+  const submitBtn    = dom.importSubmitBtn;
+  const resultEl     = dom.importResult;
+
+  if (!typeSelect) return;
+
+  typeSelect.addEventListener('change', () => {
+    const t = typeSelect.value;
+    if (t) {
+      templateBtn.href = `api/export.php?type=${t}&template=1`;
+      templateBtn.style.display = '';
+    } else {
+      templateBtn.style.display = 'none';
+    }
+    updateSubmitState();
+  });
+
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    fileLabel.textContent = f ? f.name : 'Selecionar arquivo...';
+    updateSubmitState();
+  });
+
+  function updateSubmitState() {
+    submitBtn.disabled = !(typeSelect.value && fileInput.files.length > 0);
+  }
+
+  submitBtn.addEventListener('click', async () => {
+    const type = typeSelect.value;
+    const file = fileInput.files[0];
+    if (!type || !file) return;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importando...';
+    resultEl.hidden = true;
+
+    try {
+      const fd = new FormData();
+      fd.append('type', type);
+      fd.append('file', file);
+      fd.append('csrf_token', state.csrfToken);
+
+      const res = await fetch('api/import.php', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': state.csrfToken }
+      });
+      const data = await res.json();
+
+      resultEl.hidden = false;
+      resultEl.className = 'import-result';
+
+      if (!res.ok || !data.ok) {
+        resultEl.classList.add('err');
+        resultEl.innerHTML = `<div class="import-stats"><i class="fa-solid fa-circle-xmark"></i> Erro: ${escapeHtml(data.error || 'Falha desconhecida.')}</div>`;
+      } else {
+        resultEl.classList.add('ok');
+        const parts = [];
+        if (data.inserted) parts.push(`<strong>${data.inserted}</strong> criado(s)`);
+        if (data.updated)  parts.push(`<strong>${data.updated}</strong> atualizado(s)`);
+        resultEl.innerHTML = `<div class="import-stats"><i class="fa-solid fa-circle-check"></i> ${parts.join(', ') || 'Concluido sem alteracoes.'}</div>`;
+        if (data.errors && data.errors.length) {
+          resultEl.innerHTML += `<div class="import-errors">${data.errors.map(escapeHtml).join('<br>')}</div>`;
+        }
+        await loadAllData();
+      }
+    } catch (err) {
+      resultEl.hidden = false;
+      resultEl.className = 'import-result err';
+      resultEl.innerHTML = `<div class="import-stats"><i class="fa-solid fa-circle-xmark"></i> Erro de rede: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-file-import"></i> Importar';
+      updateSubmitState();
+    }
+  });
+}());
 
 init();

@@ -930,6 +930,58 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 .config-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .compact-label  { max-width: 220px; }
 
+/* ── Export / Import (Dados section) ───────────────────── */
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.export-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: var(--r-md);
+  border: 1px solid var(--border); background: var(--surface);
+  text-decoration: none; color: var(--text);
+  transition: border-color .2s, background .2s;
+}
+.export-card:hover { border-color: var(--gold-dim); background: rgba(201,168,76,0.06); }
+.export-card > i { font-size: 18px; color: var(--gold); flex-shrink: 0; width: 22px; text-align: center; }
+.export-card > div { flex: 1; min-width: 0; }
+.export-card strong { display: block; font-size: 13px; }
+.export-card small  { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.export-card .chip  { flex-shrink: 0; }
+
+.import-section { display: grid; gap: 16px; }
+.import-controls {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+}
+.import-controls .form-group { display: flex; flex-direction: column; gap: 6px; min-width: 160px; }
+.import-controls .form-group .label { font-size: 12px; color: var(--muted); font-weight: 600; }
+.import-file-label {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; height: 38px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; font-size: 13px; transition: border-color .2s;
+  white-space: nowrap; overflow: hidden;
+}
+.import-file-label:hover { border-color: var(--gold-dim); }
+.import-file-label i { color: var(--gold); flex-shrink: 0; }
+.import-file-label input[type="file"] { display: none; }
+.import-actions { display: flex; gap: 8px; align-items: flex-end; padding-bottom: 0; }
+.import-result {
+  padding: 14px 16px; border-radius: var(--r-md);
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: 13px; line-height: 1.6;
+}
+.import-result.ok   { border-color: #3ecf8e; }
+.import-result.err  { border-color: #f87171; }
+.import-result .import-stats { font-weight: 700; margin-bottom: 6px; }
+.import-result .import-errors {
+  margin-top: 8px; padding: 10px 12px;
+  background: rgba(248,113,113,0.08); border-radius: var(--r-sm);
+  max-height: 140px; overflow-y: auto;
+  font-size: 11.5px; color: #f87171;
+}
+
 #thermal-status {
   min-height: 38px; padding: 9px 12px;
   border-radius: var(--r-sm);
