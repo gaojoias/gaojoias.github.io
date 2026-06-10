@@ -687,26 +687,27 @@
               <strong>Baixar arquivo modelo</strong>
               <small>CSV com as colunas corretas para preenchimento</small>
             </div>
-            <i class="fa-solid fa-arrow-down"></i>
+            <i class="fa-solid fa-arrow-down import-template-dl"></i>
           </a>
           <div class="import-dropzone" id="import-dropzone">
-            <input type="file" id="import-file-hidden" accept=".csv,.txt,.xlsx,.xls" />
+            <input type="file" id="import-file-hidden" accept=".csv,.txt,.xlsx,.xls" style="display:none" />
             <div class="import-dz-idle" id="import-dz-idle">
               <div class="import-dz-cloud"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-              <p class="import-dz-text"><strong>Arraste e solte o arquivo aqui</strong><br><span>ou clique para selecionar</span></p>
+              <p class="import-dz-main-text">Arraste e solte o arquivo aqui</p>
+              <p class="import-dz-sub-text">ou clique para selecionar</p>
               <div class="import-dz-badges">
                 <span class="chip chip-neutral">CSV</span>
                 <span class="chip chip-neutral">XLSX</span>
                 <span class="chip chip-neutral">XLS</span>
               </div>
             </div>
-            <div class="import-dz-selected" id="import-dz-selected" hidden>
-              <div class="import-dz-file-icon"><i class="fa-solid fa-file" id="import-dz-file-icon-i"></i></div>
-              <div class="import-dz-file-info">
-                <strong id="import-dz-filename"></strong>
-                <small id="import-dz-filesize"></small>
-              </div>
-              <button type="button" class="import-dz-clear" id="import-dz-clear" aria-label="Remover arquivo"><i class="fa-solid fa-xmark"></i></button>
+            <div class="import-dz-selected" id="import-dz-selected">
+              <div class="import-dz-file-icon"><i id="import-dz-file-icon-i" class="fa-solid fa-file"></i></div>
+              <p class="import-dz-file-name" id="import-dz-filename"></p>
+              <p class="import-dz-file-size" id="import-dz-filesize"></p>
+              <button type="button" class="import-dz-clear" id="import-dz-clear">
+                <i class="fa-solid fa-xmark"></i> Trocar arquivo
+              </button>
             </div>
           </div>
           <div id="import-modal-result" class="import-modal-result" hidden></div>
