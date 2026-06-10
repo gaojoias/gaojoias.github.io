@@ -100,7 +100,6 @@
         <button class="nav-link" data-view="lembretes" data-admin role="menuitem"><i class="fa-solid fa-bell"></i><span>Lembretes <small id="lembrete-count" class="muted"></small></span></button>
         <button class="nav-link" data-view="logs" data-admin role="menuitem"><i class="fa-solid fa-shield-halved"></i><span>Logs de acesso</span></button>
         <button class="nav-link" data-view="config" data-admin role="menuitem"><i class="fa-solid fa-gear"></i><span>Configura&ccedil;&otilde;es</span></button>
-        <button class="nav-link" data-view="dados" data-admin role="menuitem"><i class="fa-solid fa-database"></i><span>Dados</span></button>
       </nav>
 
       <div class="sidebar-footer">
@@ -274,6 +273,10 @@
               <button class="btn btn-primary" data-open-modal="cliente-form">
                 <i class="fa-solid fa-user-plus"></i><span>Novo cliente</span>
               </button>
+              <div class="data-actions">
+                <a class="btn btn-ghost data-btn" href="api/export.php?type=clientes" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
+                <button class="btn btn-ghost data-btn" data-import-type="clientes" data-import-label="Clientes" title="Importar"><i class="fa-solid fa-file-arrow-up"></i></button>
+              </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="cliente-search" class="input" type="search" placeholder="Buscar por nome ou telefone" />
@@ -308,6 +311,9 @@
               <button class="btn btn-primary" data-open-modal="orcamento-form">
                 <i class="fa-solid fa-file-circle-plus"></i><span>Novo or&ccedil;amento</span>
               </button>
+              <div class="data-actions">
+                <a class="btn btn-ghost data-btn" href="api/export.php?type=orcamentos" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
+              </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="orcamento-search" class="input" type="search" placeholder="Buscar por cliente ou status" />
@@ -342,6 +348,9 @@
               <button class="btn btn-primary" data-open-modal="venda-form">
                 <i class="fa-solid fa-coins"></i><span>Nova venda</span>
               </button>
+              <div class="data-actions">
+                <a class="btn btn-ghost data-btn" href="api/export.php?type=vendas" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
+              </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="venda-search" class="input" type="search" placeholder="Buscar por cliente ou pagamento" />
@@ -380,6 +389,10 @@
               <button class="btn btn-ghost" data-open-modal="inventory-form">
                 <i class="fa-solid fa-boxes-stacked"></i><span>Ajuste de estoque</span>
               </button>
+              <div class="data-actions">
+                <a class="btn btn-ghost data-btn" href="api/export.php?type=produtos" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
+                <button class="btn btn-ghost data-btn" data-import-type="produtos" data-import-label="Produtos" title="Importar"><i class="fa-solid fa-file-arrow-up"></i></button>
+              </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="product-search" class="input" type="search" placeholder="Buscar por SKU, nome, categoria ou status" />
@@ -435,6 +448,10 @@
               <button class="btn btn-primary" data-open-modal="fornecedor-form">
                 <i class="fa-solid fa-plus"></i><span>Novo fornecedor</span>
               </button>
+              <div class="data-actions">
+                <a class="btn btn-ghost data-btn" href="api/export.php?type=fornecedores" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
+                <button class="btn btn-ghost data-btn" data-import-type="fornecedores" data-import-label="Fornecedores" title="Importar"><i class="fa-solid fa-file-arrow-up"></i></button>
+              </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="fornecedor-search" class="input" type="search" placeholder="Buscar por nome, contato ou CNPJ" />
@@ -500,6 +517,10 @@
               <button class="btn btn-primary" data-open-modal="financeiro-form">
                 <i class="fa-solid fa-circle-plus"></i><span>Novo lan&ccedil;amento</span>
               </button>
+              <div class="data-actions">
+                <a class="btn btn-ghost data-btn" href="api/export.php?type=financeiro" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
+                <button class="btn btn-ghost data-btn" data-import-type="financeiro" data-import-label="Financeiro" title="Importar"><i class="fa-solid fa-file-arrow-up"></i></button>
+              </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <input id="financeiro-search" class="input" type="search" placeholder="Buscar por categoria, descricao ou tipo" />
@@ -643,91 +664,61 @@
         </div>
       </section>
 
-      <!-- ── Dados: export / import ──────────────────────── -->
-      <section id="dados" class="view" data-admin>
-
-        <div class="panel">
-          <div class="panel-header">
-            <h4>Exportar dados</h4>
-            <span class="muted">Baixe registros em CSV — compativel com Excel e Google Sheets</span>
-          </div>
-          <div class="export-grid">
-            <a class="export-card" href="api/export.php?type=produtos" target="_blank" rel="noopener">
-              <i class="fa-solid fa-gem"></i>
-              <div><strong>Produtos</strong><small>SKU, nome, preco, custo, estoque</small></div>
-              <span class="chip chip-neutral">CSV</span>
-            </a>
-            <a class="export-card" href="api/export.php?type=clientes" target="_blank" rel="noopener">
-              <i class="fa-solid fa-users"></i>
-              <div><strong>Clientes</strong><small>Nome, email, telefone, empresa</small></div>
-              <span class="chip chip-neutral">CSV</span>
-            </a>
-            <a class="export-card" href="api/export.php?type=financeiro" target="_blank" rel="noopener">
-              <i class="fa-solid fa-hand-holding-dollar"></i>
-              <div><strong>Financeiro</strong><small>Lancamentos, valor, status, vencimento</small></div>
-              <span class="chip chip-neutral">CSV</span>
-            </a>
-            <a class="export-card" href="api/export.php?type=orcamentos" target="_blank" rel="noopener">
-              <i class="fa-solid fa-file-invoice-dollar"></i>
-              <div><strong>Orcamentos</strong><small>Itens, precos, margens</small></div>
-              <span class="chip chip-neutral">CSV</span>
-            </a>
-            <a class="export-card" href="api/export.php?type=vendas" target="_blank" rel="noopener">
-              <i class="fa-solid fa-bag-shopping"></i>
-              <div><strong>Vendas</strong><small>Itens, cliente, pagamento</small></div>
-              <span class="chip chip-neutral">CSV</span>
-            </a>
-            <a class="export-card" href="api/export.php?type=fornecedores" target="_blank" rel="noopener">
-              <i class="fa-solid fa-handshake"></i>
-              <div><strong>Fornecedores</strong><small>Nome, contato, CNPJ</small></div>
-              <span class="chip chip-neutral">CSV</span>
-            </a>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <h4>Importar dados</h4>
-            <span class="muted">Envie um CSV para criar registros em lote — use o modelo abaixo como referencia</span>
-          </div>
-          <div class="import-section">
-            <div class="import-controls">
-              <div class="form-group">
-                <label class="label" for="import-type-select">Tipo de dado</label>
-                <select id="import-type-select" class="input">
-                  <option value="">Selecione...</option>
-                  <option value="produtos">Produtos</option>
-                  <option value="clientes">Clientes</option>
-                  <option value="financeiro">Financeiro</option>
-                  <option value="fornecedores">Fornecedores</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="label" for="import-file-input">Arquivo CSV</label>
-                <label class="import-file-label" id="import-file-label" for="import-file-input">
-                  <i class="fa-solid fa-file-arrow-up"></i>
-                  <span id="import-file-name-label">Selecionar arquivo...</span>
-                  <input type="file" id="import-file-input" accept=".csv,.txt" />
-                </label>
-              </div>
-              <div class="import-actions">
-                <a id="import-template-btn" class="btn btn-ghost" style="display:none" href="#" target="_blank" rel="noopener">
-                  <i class="fa-solid fa-file-arrow-down"></i> Baixar modelo
-                </a>
-                <button id="import-submit-btn" class="btn btn-primary" disabled>
-                  <i class="fa-solid fa-file-import"></i> Importar
-                </button>
-              </div>
-            </div>
-            <div id="import-result" class="import-result" hidden></div>
-          </div>
-        </div>
-
-      </section>
     </main>
 
     <!-- Product datalist for item builders -->
     <datalist id="product-datalist"></datalist>
+
+    <!-- Import Modal -->
+    <div id="import-modal" class="import-modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+      <div class="import-modal-dialog">
+        <div class="import-modal-header">
+          <div class="import-modal-icon"><i class="fa-solid fa-file-import" id="import-modal-icon-i"></i></div>
+          <div class="import-modal-titles">
+            <h3 id="import-modal-title">Importar</h3>
+            <p id="import-modal-subtitle">CSV ou planilha Excel</p>
+          </div>
+          <button class="import-modal-close" id="import-modal-close" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="import-modal-body">
+          <a id="import-modal-template" href="#" class="import-template-row" target="_blank" rel="noopener" download>
+            <div class="import-template-icon"><i class="fa-solid fa-table"></i></div>
+            <div class="import-template-text">
+              <strong>Baixar arquivo modelo</strong>
+              <small>CSV com as colunas corretas para preenchimento</small>
+            </div>
+            <i class="fa-solid fa-arrow-down"></i>
+          </a>
+          <div class="import-dropzone" id="import-dropzone">
+            <input type="file" id="import-file-hidden" accept=".csv,.txt,.xlsx,.xls" />
+            <div class="import-dz-idle" id="import-dz-idle">
+              <div class="import-dz-cloud"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+              <p class="import-dz-text"><strong>Arraste e solte o arquivo aqui</strong><br><span>ou clique para selecionar</span></p>
+              <div class="import-dz-badges">
+                <span class="chip chip-neutral">CSV</span>
+                <span class="chip chip-neutral">XLSX</span>
+                <span class="chip chip-neutral">XLS</span>
+              </div>
+            </div>
+            <div class="import-dz-selected" id="import-dz-selected" hidden>
+              <div class="import-dz-file-icon"><i class="fa-solid fa-file" id="import-dz-file-icon-i"></i></div>
+              <div class="import-dz-file-info">
+                <strong id="import-dz-filename"></strong>
+                <small id="import-dz-filesize"></small>
+              </div>
+              <button type="button" class="import-dz-clear" id="import-dz-clear" aria-label="Remover arquivo"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div id="import-modal-result" class="import-modal-result" hidden></div>
+        </div>
+        <div class="import-modal-footer">
+          <button class="btn btn-ghost" id="import-modal-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="import-modal-submit" disabled>
+            <i class="fa-solid fa-file-import"></i> <span id="import-modal-submit-label">Importar</span>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Smart Modal -->
     <div id="smart-modal" class="smart-modal" role="dialog" aria-modal="true" aria-labelledby="smart-modal-title">
@@ -1365,6 +1356,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/app.js" defer></script>
 </body>
 </html>

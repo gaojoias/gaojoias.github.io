@@ -136,12 +136,22 @@ const dom = {
   dreResultadoLiquido: document.getElementById('dre-resultado-liquido'),
   topClientes: document.getElementById('top-clientes'),
   financeiroResumoList: document.getElementById('financeiro-resumo-list'),
-  importTypeSelect: document.getElementById('import-type-select'),
-  importFileInput: document.getElementById('import-file-input'),
-  importFileNameLabel: document.getElementById('import-file-name-label'),
-  importTemplateBtn: document.getElementById('import-template-btn'),
-  importSubmitBtn: document.getElementById('import-submit-btn'),
-  importResult: document.getElementById('import-result')
+  importModal: document.getElementById('import-modal'),
+  importModalTitle: document.getElementById('import-modal-title'),
+  importModalSubtitle: document.getElementById('import-modal-subtitle'),
+  importModalClose: document.getElementById('import-modal-close'),
+  importModalCancel: document.getElementById('import-modal-cancel'),
+  importModalTemplate: document.getElementById('import-modal-template'),
+  importModalSubmit: document.getElementById('import-modal-submit'),
+  importModalSubmitLabel: document.getElementById('import-modal-submit-label'),
+  importModalResult: document.getElementById('import-modal-result'),
+  importDropzone: document.getElementById('import-dropzone'),
+  importFileHidden: document.getElementById('import-file-hidden'),
+  importDzIdle: document.getElementById('import-dz-idle'),
+  importDzSelected: document.getElementById('import-dz-selected'),
+  importDzFilename: document.getElementById('import-dz-filename'),
+  importDzFilesize: document.getElementById('import-dz-filesize'),
+  importDzClear: document.getElementById('import-dz-clear')
 };
 
 const subtitles = {
@@ -155,8 +165,7 @@ const subtitles = {
   lembretes: 'Compromissos a pagar e alertas de vencimento',
   logs: 'Auditoria de acessos do sistema',
   config: 'Backend PHP, loja online e exportacoes',
-  fornecedores: 'Cadastro de fornecedores e distribuidores',
-  dados: 'Importar e exportar registros em CSV'
+  fornecedores: 'Cadastro de fornecedores e distribuidores'
 };
 
 const ITEM_TYPES = ['Produto', 'Servico'];
@@ -4516,86 +4525,144 @@ async function init() {
   }
 }
 
-/* ── Import / Export (Dados) ─────────────────────────────── */
-(function setupImport() {
-  const typeSelect   = dom.importTypeSelect;
-  const fileInput    = dom.importFileInput;
-  const fileLabel    = dom.importFileNameLabel;
-  const templateBtn  = dom.importTemplateBtn;
-  const submitBtn    = dom.importSubmitBtn;
-  const resultEl     = dom.importResult;
+/* ── Import Modal ────────────────────────────────────────── */
+(function setupImportModal() {
+  const importState = { type: null, label: null, file: null };
 
-  if (!typeSelect) return;
-
-  typeSelect.addEventListener('change', () => {
-    const t = typeSelect.value;
-    if (t) {
-      templateBtn.href = `api/export.php?type=${t}&template=1`;
-      templateBtn.style.display = '';
-    } else {
-      templateBtn.style.display = 'none';
-    }
-    updateSubmitState();
-  });
-
-  fileInput.addEventListener('change', () => {
-    const f = fileInput.files[0];
-    fileLabel.textContent = f ? f.name : 'Selecionar arquivo...';
-    updateSubmitState();
-  });
-
-  function updateSubmitState() {
-    submitBtn.disabled = !(typeSelect.value && fileInput.files.length > 0);
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  submitBtn.addEventListener('click', async () => {
-    const type = typeSelect.value;
-    const file = fileInput.files[0];
+  function openImportModal(type, label) {
+    importState.type  = type;
+    importState.label = label;
+    dom.importModalTitle.textContent    = `Importar ${label}`;
+    dom.importModalSubtitle.textContent = 'CSV ou planilha Excel (.xlsx / .xls)';
+    dom.importModalTemplate.href        = `api/export.php?type=${type}&template=1`;
+    resetModal();
+    dom.importModal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeImportModal() {
+    dom.importModal.hidden = true;
+    document.body.style.overflow = '';
+    resetModal();
+  }
+
+  function resetModal() {
+    importState.file = null;
+    dom.importFileHidden.value        = '';
+    dom.importDzIdle.hidden           = false;
+    dom.importDzSelected.hidden       = true;
+    dom.importModalResult.hidden      = true;
+    dom.importModalResult.className   = 'import-modal-result';
+    dom.importModalResult.innerHTML   = '';
+    dom.importModalSubmit.disabled    = true;
+    dom.importModalSubmitLabel.textContent = 'Importar';
+  }
+
+  function setFile(file) {
+    importState.file = file;
+    const isExcel = /\.xlsx?$/i.test(file.name);
+    dom.importDzFilename.textContent    = file.name;
+    dom.importDzFilesize.textContent    = formatBytes(file.size);
+    document.getElementById('import-dz-file-icon-i').className =
+      isExcel ? 'fa-solid fa-file-excel' : 'fa-solid fa-file-csv';
+    dom.importDzIdle.hidden    = true;
+    dom.importDzSelected.hidden = false;
+    dom.importModalSubmit.disabled = false;
+    dom.importModalResult.hidden = true;
+  }
+
+  // Open via data attribute on any [data-import-type] button
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-import-type]');
+    if (btn) openImportModal(btn.dataset.importType, btn.dataset.importLabel || btn.dataset.importType);
+  });
+
+  dom.importModalClose.addEventListener('click',  closeImportModal);
+  dom.importModalCancel.addEventListener('click', closeImportModal);
+  dom.importModal.addEventListener('click', e => { if (e.target === dom.importModal) closeImportModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !dom.importModal.hidden) closeImportModal(); });
+
+  // Drop zone
+  const dz = dom.importDropzone;
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', e => { if (!dz.contains(e.relatedTarget)) dz.classList.remove('drag-over'); });
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+  dom.importFileHidden.addEventListener('change', () => {
+    if (dom.importFileHidden.files[0]) setFile(dom.importFileHidden.files[0]);
+  });
+  dom.importDzClear.addEventListener('click', e => {
+    e.stopPropagation(); resetModal();
+  });
+
+  // Submit
+  dom.importModalSubmit.addEventListener('click', async () => {
+    const { type, file } = importState;
     if (!type || !file) return;
 
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importando...';
-    resultEl.hidden = true;
+    dom.importModalSubmit.disabled = true;
+    dom.importModalSubmitLabel.textContent = 'Importando...';
+    dom.importModalSubmit.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
+    dom.importModalResult.hidden = true;
 
     try {
+      let uploadFile = file;
+
+      // Convert Excel to CSV in the browser using SheetJS
+      if (/\.xlsx?$/i.test(file.name) && typeof XLSX !== 'undefined') {
+        const ab  = await file.arrayBuffer();
+        const wb  = XLSX.read(ab, { type: 'array' });
+        const ws  = wb.Sheets[wb.SheetNames[0]];
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        uploadFile = new Blob([csv], { type: 'text/csv' });
+      }
+
       const fd = new FormData();
       fd.append('type', type);
-      fd.append('file', file);
+      fd.append('file', uploadFile, file.name.replace(/\.xlsx?$/i, '.csv'));
       fd.append('csrf_token', state.csrfToken);
 
-      const res = await fetch('api/import.php', {
-        method: 'POST',
-        body: fd,
-        credentials: 'same-origin',
+      const res  = await fetch('api/import.php', {
+        method: 'POST', body: fd, credentials: 'same-origin',
         headers: { 'X-CSRF-Token': state.csrfToken }
       });
       const data = await res.json();
 
+      const resultEl = dom.importModalResult;
       resultEl.hidden = false;
-      resultEl.className = 'import-result';
 
       if (!res.ok || !data.ok) {
-        resultEl.classList.add('err');
-        resultEl.innerHTML = `<div class="import-stats"><i class="fa-solid fa-circle-xmark"></i> Erro: ${escapeHtml(data.error || 'Falha desconhecida.')}</div>`;
+        resultEl.className = 'import-modal-result err';
+        resultEl.innerHTML = `<i class="fa-solid fa-circle-xmark im-err-icon"></i>${escapeHtml(data.error || 'Erro desconhecido.')}`;
       } else {
-        resultEl.classList.add('ok');
+        resultEl.className = 'import-modal-result ok';
         const parts = [];
         if (data.inserted) parts.push(`<strong>${data.inserted}</strong> criado(s)`);
         if (data.updated)  parts.push(`<strong>${data.updated}</strong> atualizado(s)`);
-        resultEl.innerHTML = `<div class="import-stats"><i class="fa-solid fa-circle-check"></i> ${parts.join(', ') || 'Concluido sem alteracoes.'}</div>`;
+        resultEl.innerHTML = `<i class="fa-solid fa-circle-check im-ok-icon"></i>${parts.join(' &amp; ') || 'Concluido — sem alteracoes.'}`;
         if (data.errors && data.errors.length) {
-          resultEl.innerHTML += `<div class="import-errors">${data.errors.map(escapeHtml).join('<br>')}</div>`;
+          resultEl.innerHTML += `<div class="import-row-errors">${data.errors.map(escapeHtml).join('<br>')}</div>`;
         }
         await loadAllData();
       }
     } catch (err) {
+      const resultEl = dom.importModalResult;
       resultEl.hidden = false;
-      resultEl.className = 'import-result err';
-      resultEl.innerHTML = `<div class="import-stats"><i class="fa-solid fa-circle-xmark"></i> Erro de rede: ${escapeHtml(err.message)}</div>`;
+      resultEl.className = 'import-modal-result err';
+      resultEl.innerHTML = `<i class="fa-solid fa-circle-xmark im-err-icon"></i>Erro de rede: ${escapeHtml(err.message)}`;
     } finally {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = '<i class="fa-solid fa-file-import"></i> Importar';
-      updateSubmitState();
+      dom.importModalSubmit.disabled = false;
+      dom.importModalSubmit.querySelector('i').className = 'fa-solid fa-file-import';
+      dom.importModalSubmitLabel.textContent = 'Importar';
     }
   });
 }());
