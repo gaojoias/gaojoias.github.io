@@ -663,6 +663,7 @@
           </button>
         </div>
         <div class="smart-modal-body" id="smart-modal-body"></div>
+        <div class="smart-modal-footer" id="smart-modal-footer"></div>
       </div>
     </div>
 
@@ -696,6 +697,7 @@
         <label>Observacao publica<input type="text" name="obsPublic" /></label>
         <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
         <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="0" /></label>
+        <div class="full form-section-label"><span>Itens do orçamento</span></div>
         <div class="builder-card items-builder full" data-builder-kind="orcamento">
           <div class="builder-head">
             <div>
@@ -717,6 +719,7 @@
           <select name="cliente" id="venda-cliente" required></select>
         </label>
         <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <div class="full form-section-label"><span>Itens da venda</span></div>
         <div class="builder-card items-builder full" data-builder-kind="venda">
           <div class="builder-head">
             <div>
@@ -999,6 +1002,7 @@
       var smSubtitle  = document.getElementById('smart-modal-subtitle');
       var smIcon      = document.getElementById('smart-modal-icon');
       var smClose     = document.getElementById('smart-modal-close');
+      var smFooter    = document.getElementById('smart-modal-footer');
       var formStorage = document.getElementById('form-storage');
       var currentForm    = null;
       var closeTimer     = null;
@@ -1030,6 +1034,17 @@
         smBody.appendChild(form);
         currentForm = form;
 
+        /* Move primary action to sticky footer */
+        if (smFooter) {
+          smFooter.innerHTML = '';
+          var submitBtn = smBody.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.setAttribute('form', formId);
+            smFooter.appendChild(submitBtn);
+          }
+          smFooter.hidden = !submitBtn;
+        }
+
         smModal.classList.add('open');
         document.body.style.overflow = 'hidden';
 
@@ -1045,6 +1060,15 @@
         document.body.style.overflow = '';
         var delay = immediate ? 0 : 340;
         setTimeout(function () {
+          /* Restore submit button from footer back into the form */
+          if (smFooter) {
+            var submitBtn = smFooter.querySelector('button[type="submit"]');
+            if (submitBtn && currentForm) {
+              submitBtn.removeAttribute('form');
+              currentForm.appendChild(submitBtn);
+            }
+            smFooter.innerHTML = '';
+          }
           if (currentForm && formStorage) formStorage.appendChild(currentForm);
           currentForm  = null;
           pendingSubmit = false;
