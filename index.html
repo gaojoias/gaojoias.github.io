@@ -609,58 +609,131 @@
         <div class="panel">
           <div class="panel-header">
             <h4>Configuracoes</h4>
-            <span class="muted">Conexoes e parametros do sistema</span>
+            <span class="muted">Sistema, impressoras e exportacoes</span>
           </div>
-          <div class="config-grid">
-            <div class="config-card">
-              <h5>Backend PHP/MySQL</h5>
-              <p>O painel agora usa API PHP com sessao segura, CSRF e banco MySQL.</p>
-              <input id="script-url" class="input" type="text" readonly value="api/index.php" />
-              <button id="save-script-url" class="btn btn-primary">Recarregar dados</button>
-              <a class="btn btn-ghost" href="loja/index.php" target="_blank" rel="noopener noreferrer">Abrir loja</a>
-            </div>
-            <div class="config-card">
-              <h5>Documentos e impressao</h5>
-              <p>Use impressao normal para HP Deskjet e Web Serial para Bematech MP-4200 HS no Chrome OS.</p>
-              <div class="config-actions">
-                <button id="test-pdf" class="btn btn-ghost">Gerar PDF teste</button>
-                <button id="test-print" class="btn btn-ghost"><i class="fa-solid fa-print"></i> HP / impressao normal</button>
-              </div>
-            </div>
-            <div class="config-card">
-              <h5>Bematech MP-4200 HS</h5>
-              <p id="thermal-status">Web Serial ainda nao conectado.</p>
-              <label class="compact-label">Velocidade serial
-                <select id="thermal-baud" class="input">
-                  <option value="9600">9600</option>
-                  <option value="19200">19200</option>
-                  <option value="38400">38400</option>
-                  <option value="57600">57600</option>
-                  <option value="115200">115200</option>
-                </select>
-              </label>
-              <label class="compact-label">Formato da Bematech
-                <select id="thermal-mode" class="input">
-                  <option value="text">Texto ESC/POS</option>
-                  <option value="visual">Visual da nota</option>
-                </select>
-              </label>
-              <div class="config-actions">
-                <button id="thermal-connect" class="btn btn-primary" type="button"><i class="fa-solid fa-plug"></i> Conectar Bematech</button>
-                <button id="test-thermal" class="btn btn-ghost" type="button"><i class="fa-solid fa-receipt"></i> Teste Bematech</button>
-                <button id="thermal-disconnect" class="btn btn-ghost" type="button"><i class="fa-solid fa-link-slash"></i> Desconectar</button>
-              </div>
-            </div>
-            <div class="config-card">
-              <h5>Relatorios</h5>
-              <p>Baixe relatorios rapidos para auditoria.</p>
-              <div class="config-actions">
-                <button id="export-clientes" class="btn btn-ghost">Exportar clientes</button>
-                <button id="export-vendas" class="btn btn-ghost">Exportar vendas</button>
-                <button id="export-financeiro" class="btn btn-ghost">Exportar financeiro</button>
+
+          <!-- Sistema -->
+          <div class="cfg-group">
+            <p class="cfg-group-label"><i class="fa-solid fa-server"></i> Sistema</p>
+            <div class="cfg-grid">
+              <div class="cfg-card">
+                <div class="cfg-card-head">
+                  <div class="cfg-icon"><i class="fa-solid fa-database"></i></div>
+                  <div class="cfg-card-info">
+                    <strong>Backend PHP / MySQL</strong>
+                    <span>API com autenticacao, sessao segura e CSRF</span>
+                  </div>
+                </div>
+                <div class="cfg-endpoint">
+                  <i class="fa-solid fa-link"></i>
+                  <code id="script-url">api/index.php</code>
+                </div>
+                <div class="cfg-actions">
+                  <button id="save-script-url" class="btn btn-primary">
+                    <i class="fa-solid fa-rotate"></i> Recarregar dados
+                  </button>
+                  <a class="btn btn-ghost" href="loja/index.php" target="_blank" rel="noopener noreferrer">
+                    <i class="fa-solid fa-store"></i> Abrir loja
+                  </a>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- Impressao -->
+          <div class="cfg-group">
+            <p class="cfg-group-label"><i class="fa-solid fa-print"></i> Impressao</p>
+            <div class="cfg-grid">
+
+              <div class="cfg-card">
+                <div class="cfg-card-head">
+                  <div class="cfg-icon cfg-icon--blue"><i class="fa-solid fa-file-pdf"></i></div>
+                  <div class="cfg-card-info">
+                    <strong>HP Deskjet / Documentos</strong>
+                    <span>Impressao padrao do Chrome OS e geracao de PDF</span>
+                  </div>
+                </div>
+                <p class="cfg-desc">Usa o dialogo nativo do navegador para HP e impressoras em rede. PDF gerado via html2pdf.js — ideal para orcamentos e recibos.</p>
+                <div class="cfg-actions">
+                  <button id="test-pdf" class="btn btn-ghost">
+                    <i class="fa-solid fa-file-arrow-down"></i> Gerar PDF teste
+                  </button>
+                  <button id="test-print" class="btn btn-ghost">
+                    <i class="fa-solid fa-print"></i> Impressao normal
+                  </button>
+                </div>
+              </div>
+
+              <div class="cfg-card">
+                <div class="cfg-card-head">
+                  <div class="cfg-icon cfg-icon--green"><i class="fa-solid fa-receipt"></i></div>
+                  <div class="cfg-card-info">
+                    <strong>Bematech MP-4200 HS</strong>
+                    <p id="thermal-status" data-status="">Web Serial ainda nao conectado.</p>
+                  </div>
+                </div>
+                <div class="cfg-fields">
+                  <label class="cfg-field-label">
+                    Velocidade serial
+                    <select id="thermal-baud" class="input">
+                      <option value="9600">9600 baud</option>
+                      <option value="19200">19200 baud</option>
+                      <option value="38400">38400 baud</option>
+                      <option value="57600">57600 baud</option>
+                      <option value="115200">115200 baud</option>
+                    </select>
+                  </label>
+                  <label class="cfg-field-label">
+                    Formato de impressao
+                    <select id="thermal-mode" class="input">
+                      <option value="text">Texto ESC/POS</option>
+                      <option value="visual">Visual da nota</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="cfg-actions">
+                  <button id="thermal-connect" class="btn btn-primary" type="button">
+                    <i class="fa-solid fa-plug"></i> Conectar
+                  </button>
+                  <button id="test-thermal" class="btn btn-ghost" type="button">
+                    <i class="fa-solid fa-receipt"></i> Teste
+                  </button>
+                  <button id="thermal-disconnect" class="btn btn-ghost" type="button">
+                    <i class="fa-solid fa-link-slash"></i> Desconectar
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Exportacao rapida -->
+          <div class="cfg-group">
+            <p class="cfg-group-label"><i class="fa-solid fa-file-export"></i> Exportacao rapida</p>
+            <div class="cfg-grid">
+              <div class="cfg-card">
+                <div class="cfg-card-head">
+                  <div class="cfg-icon"><i class="fa-solid fa-table-list"></i></div>
+                  <div class="cfg-card-info">
+                    <strong>Relatorios CSV</strong>
+                    <span>Baixe registros para auditoria e backup rapido</span>
+                  </div>
+                </div>
+                <div class="cfg-actions">
+                  <button id="export-clientes" class="btn btn-ghost">
+                    <i class="fa-solid fa-users"></i> Clientes
+                  </button>
+                  <button id="export-vendas" class="btn btn-ghost">
+                    <i class="fa-solid fa-bag-shopping"></i> Vendas
+                  </button>
+                  <button id="export-financeiro" class="btn btn-ghost">
+                    <i class="fa-solid fa-hand-holding-dollar"></i> Financeiro
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
