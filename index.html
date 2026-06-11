@@ -111,6 +111,15 @@
     </button>
 
     <main class="content">
+      <div id="offline-banner" class="offline-banner hidden" role="status" aria-live="polite">
+        <i class="fa-solid fa-wifi" style="opacity:.4"></i>
+        <span class="offline-banner-msg">Modo offline — dados do &uacute;ltimo acesso</span>
+        <span id="offline-pending-badge" class="offline-pending-badge hidden">0 pendente(s)</span>
+        <button type="button" id="offline-sync-btn" class="offline-sync-btn hidden">
+          <i class="fa-solid fa-arrows-rotate"></i> Sincronizar agora
+        </button>
+      </div>
+
       <header class="topbar">
         <button id="menu-btn" class="icon-btn"><i class="fa-solid fa-bars"></i></button>
         <div class="topbar-title">

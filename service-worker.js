@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gao-joias-v14';
+const CACHE_NAME = 'gao-joias-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,9 @@ const ASSETS = [
   'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -45,11 +47,20 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          // Cache any successful GET response for offline reuse
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return response;
         })
-        .catch(() => cached);
+        .catch(() => {
+          // Offline fallback: for navigation requests serve the shell
+          if (request.mode === 'navigate') {
+            return caches.match('./') || caches.match('./index.html');
+          }
+          return new Response('', { status: 503 });
+        });
     })
   );
 });

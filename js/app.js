@@ -1306,16 +1306,33 @@ function updateLogos(mode) {
   });
 }
 
+// Actions that can be queued and executed later when offline
+const OFFLINE_QUEUEABLE = new Set([
+  'createVenda', 'createCliente', 'createOrcamento',
+  'createFinanceiro', 'createLembrete', 'createProduct', 'createFornecedor',
+]);
+
 async function apiRequest(action, payload = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (state.csrfToken) headers['X-CSRF-Token'] = state.csrfToken;
-  const response = await fetch(API_ENDPOINT, {
-    method: 'POST',
-    headers,
-    credentials: 'same-origin',
-    body: JSON.stringify({ action, payload })
-  });
-  const data = await response.json().catch(() => null);
+
+  let response, data;
+  try {
+    response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers,
+      credentials: 'same-origin',
+      body: JSON.stringify({ action, payload })
+    });
+    data = await response.json().catch(() => null);
+  } catch (networkErr) {
+    // No network — queue create operations, fail everything else
+    if (OFFLINE_QUEUEABLE.has(action)) {
+      return offlineEnqueue(action, payload);
+    }
+    throw networkErr;
+  }
+
   if (!response.ok || !data?.ok) {
     const message = data?.error || 'Erro ao comunicar com o backend PHP';
     if (response.status === 401) {
@@ -1348,9 +1365,20 @@ async function loadAllData() {
       inventoryMovements: data?.inventoryMovements || [],
       pedidos: data?.pedidos || []
     };
+    // Persist fresh data for offline use
+    offlineStore.cacheSave(state.data).catch(() => {});
     renderAll();
   } catch (error) {
-    showToast(error.message || 'Falha ao carregar dados', 'error');
+    // Try to recover from offline cache
+    const cached = await offlineStore.cacheLoad().catch(() => null);
+    if (cached) {
+      state.data = { ...cached };
+      await offlineStore.applyPendingToState(state.data);
+      renderAll();
+      showToast('Modo offline — exibindo dados do último acesso.', 'error');
+    } else {
+      showToast(error.message || 'Falha ao carregar dados', 'error');
+    }
   } finally {
     setLoading(false);
   }
@@ -1433,6 +1461,8 @@ async function handleLogin(event) {
   try {
     const data = await apiRequest('login', { user, senha });
     applyAuthenticatedUser(data.user);
+    // Cache session for offline auto-login (valid 8h)
+    try { localStorage.setItem('gao_offline_session', JSON.stringify({ user: data.user, ts: Date.now() })); } catch (_) {}
     dom.loginScreen.classList.add('hidden');
     dom.appShell.classList.remove('hidden');
     showToast(`Bem-vindo, ${state.user}!`);
@@ -4516,11 +4546,24 @@ async function init() {
     state.csrfToken = session.csrfToken || state.csrfToken;
     if (session.authenticated && session.user) {
       applyAuthenticatedUser(session.user);
+      // Refresh cached session on every successful auth check
+      try { localStorage.setItem('gao_offline_session', JSON.stringify({ user: session.user, ts: Date.now() })); } catch (_) {}
       dom.loginScreen.classList.add('hidden');
       dom.appShell.classList.remove('hidden');
       await loadAllData();
     }
   } catch (error) {
+    // No network — try cached session (valid 8h)
+    try {
+      const saved = JSON.parse(localStorage.getItem('gao_offline_session') || 'null');
+      if (saved?.user && (Date.now() - saved.ts) < 8 * 60 * 60 * 1000) {
+        applyAuthenticatedUser(saved.user);
+        dom.loginScreen.classList.add('hidden');
+        dom.appShell.classList.remove('hidden');
+        await loadAllData();
+        return;
+      }
+    } catch (_) {}
     console.warn(error);
   }
 }
@@ -4675,6 +4718,240 @@ async function init() {
       dom.importModalSubmitLabel.textContent = 'Importar';
     }
   });
+}());
+
+/* ── Offline Store (IndexedDB) ───────────────────────────── */
+const offlineStore = (function () {
+  const DB = 'gao_offline_v1';
+  let _db = null;
+
+  function open() {
+    return new Promise((res, rej) => {
+      if (_db) return res(_db);
+      const req = indexedDB.open(DB, 1);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('cache'))
+          db.createObjectStore('cache', { keyPath: 'k' });
+        if (!db.objectStoreNames.contains('queue'))
+          db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+      };
+      req.onsuccess = e => { _db = e.target.result; res(_db); };
+      req.onerror   = () => rej(req.error);
+    });
+  }
+
+  async function cacheSave(data) {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('cache', 'readwrite');
+      tx.objectStore('cache').put({ k: 'listAll', v: data, ts: Date.now() });
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  }
+
+  async function cacheLoad() {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('cache', 'readonly');
+      const req = tx.objectStore('cache').get('listAll');
+      req.onsuccess = () => res(req.result?.v ?? null);
+      req.onerror   = () => rej(req.error);
+    });
+  }
+
+  async function queuePush(item) {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx  = db.transaction('queue', 'readwrite');
+      const req = tx.objectStore('queue').add({ ...item, ts: Date.now() });
+      req.onsuccess = () => res(req.result);
+      tx.onerror = () => rej(tx.error);
+    });
+  }
+
+  async function queueAll() {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx  = db.transaction('queue', 'readonly');
+      const req = tx.objectStore('queue').getAll();
+      req.onsuccess = () => res(req.result);
+      req.onerror   = () => rej(req.error);
+    });
+  }
+
+  async function queueRemove(id) {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('queue', 'readwrite');
+      tx.objectStore('queue').delete(id);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  }
+
+  async function queueCount() {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx  = db.transaction('queue', 'readonly');
+      const req = tx.objectStore('queue').count();
+      req.onsuccess = () => res(req.result);
+      req.onerror   = () => rej(req.error);
+    });
+  }
+
+  // Inject pending queue items back into state.data when loading offline cache
+  async function applyPendingToState(data) {
+    const pending = await queueAll().catch(() => []);
+    for (const op of pending) {
+      if (op.snapshot && op.action === 'createVenda')
+        data.vendas = [op.snapshot, ...data.vendas.filter(v => v.id !== op.snapshot.id)];
+      else if (op.snapshot && op.action === 'createCliente')
+        data.clientes = [op.snapshot, ...data.clientes.filter(c => c.id !== op.snapshot.id)];
+      else if (op.snapshot && op.action === 'createOrcamento')
+        data.orcamentos = [op.snapshot, ...data.orcamentos.filter(o => o.id !== op.snapshot.id)];
+    }
+    return pending.length;
+  }
+
+  return { cacheSave, cacheLoad, queuePush, queueAll, queueRemove, queueCount, applyPendingToState };
+}());
+
+/* ── Offline Queue Helpers ───────────────────────────────── */
+let _pendingOfflineNum = 0;
+
+function _nextOfflineNum() {
+  return String(++_pendingOfflineNum).padStart(3, '0');
+}
+
+async function offlineEnqueue(action, payload) {
+  const offlineId  = 'OFF_' + Date.now();
+  const offlineNum = 'PEND-' + _nextOfflineNum();
+  const now        = new Date().toISOString();
+  let snapshot     = null;
+
+  if (action === 'createVenda') {
+    snapshot = {
+      rowIndex: offlineId, id: offlineId,
+      numero: offlineNum,
+      dataHora: payload.dataHora || now,
+      cliente: payload.cliente || payload.clienteNome || '',
+      produtoServico: payload.produtoServico || '',
+      descricao: payload.descricao || '',
+      valor: payload.valor || 0,
+      valorRecebido: payload.valorRecebido || 0,
+      saldoRestante: payload.saldoRestante ?? payload.valor ?? 0,
+      statusRecebimento: 'Pendente',
+      totalCustos: payload.totalCustos || 0,
+      lucro: payload.lucro || 0,
+      margem: payload.margem || 0,
+      pgto: payload.pgto || 'Pix',
+      itensJson: JSON.stringify(payload.itens || []),
+      pagamentosJson: JSON.stringify(payload.pagamentos || []),
+      obs: payload.obs || '',
+      _offline: true,
+    };
+    state.data.vendas = [snapshot, ...(state.data.vendas || [])];
+  } else if (action === 'createCliente') {
+    snapshot = {
+      rowIndex: offlineId, id: offlineId,
+      nome: payload.nome || payload.name || '',
+      email: payload.email || '',
+      telefone: payload.telefone || payload.phone || '',
+      empresa: payload.empresa || payload.company || '',
+      documento: payload.documento || '',
+      obs: payload.obs || '',
+      _offline: true,
+    };
+    state.data.clientes = [snapshot, ...(state.data.clientes || [])];
+  } else if (action === 'createOrcamento') {
+    snapshot = {
+      rowIndex: offlineId, id: offlineId,
+      numero: offlineNum,
+      dataHora: now,
+      cliente: payload.cliente || payload.clienteNome || '',
+      produtoServico: payload.produtoServico || '',
+      status: 'Em negociacao',
+      valorTotal: payload.valorTotal || 0,
+      _offline: true,
+    };
+    state.data.orcamentos = [snapshot, ...(state.data.orcamentos || [])];
+  }
+
+  await offlineStore.queuePush({ action, payload, snapshot, offlineId }).catch(() => {});
+  offlineUI.refresh();
+  renderAll();
+  showToast('Sem conexão — salvo localmente, será sincronizado quando a internet voltar.', 'error');
+  return snapshot || { id: offlineId, _offline: true };
+}
+
+/* ── Offline Banner UI ───────────────────────────────────── */
+const offlineUI = (function () {
+  const banner      = document.getElementById('offline-banner');
+  const badge       = document.getElementById('offline-pending-badge');
+  const syncBtn     = document.getElementById('offline-sync-btn');
+
+  function show(online) {
+    if (!banner) return;
+    banner.classList.toggle('hidden', online);
+  }
+
+  async function refresh() {
+    if (!banner) return;
+    const online = navigator.onLine;
+    show(!online);
+    if (!online || !syncBtn) return;
+    // Show sync button if there are pending items (even when back online)
+    const count = await offlineStore.queueCount().catch(() => 0);
+    if (badge)   { badge.textContent = count + (count === 1 ? ' pendente' : ' pendente(s)'); badge.classList.toggle('hidden', count === 0); }
+    if (syncBtn) { syncBtn.classList.toggle('hidden', count === 0); }
+    if (count > 0) banner.classList.remove('hidden');
+  }
+
+  async function sync() {
+    if (!syncBtn) return;
+    const pending = await offlineStore.queueAll().catch(() => []);
+    if (!pending.length) { refresh(); return; }
+
+    syncBtn.classList.add('syncing');
+    syncBtn.disabled = true;
+
+    // Refresh auth/CSRF before sending queued operations
+    try {
+      const session = await apiRequest('me');
+      if (session?.csrfToken) state.csrfToken = session.csrfToken;
+    } catch (_) {
+      syncBtn.classList.remove('syncing');
+      syncBtn.disabled = false;
+      showToast('Sem conexão para sincronizar.', 'error');
+      return;
+    }
+
+    let ok = 0; let fail = 0;
+    for (const op of pending) {
+      try {
+        await apiRequest(op.action, op.payload);
+        await offlineStore.queueRemove(op.id);
+        ok++;
+      } catch (_) { fail++; }
+    }
+
+    syncBtn.classList.remove('syncing');
+    syncBtn.disabled = false;
+    if (ok)   showToast(`${ok} operação(ões) sincronizada(s).`);
+    if (fail) showToast(`${fail} operação(ões) não puderam ser enviadas.`, 'error');
+    await loadAllData();
+    refresh();
+  }
+
+  if (syncBtn) syncBtn.addEventListener('click', sync);
+
+  window.addEventListener('online',  () => { refresh(); if (state.user) sync(); });
+  window.addEventListener('offline', () => refresh());
+
+  // Initial state
+  refresh();
+
+  return { refresh, sync };
 }());
 
 /* ── Inactivity Auto-Logout (30 min) ─────────────────────── */
