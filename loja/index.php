@@ -82,7 +82,6 @@ $sidebarCart  = store_cart_items();
       </a>
       <button type="button" class="cart-trigger" id="cart-open-btn" aria-label="Abrir sacola">
         <i class="fa-solid fa-bag-shopping"></i>
-        <span>Sacola</span>
         <span class="cart-badge" id="cart-count-badge" <?= $cartCount === 0 ? 'style="display:none"' : ''; ?>><?= $cartCount; ?></span>
       </button>
       <div id="cart-callout" class="cart-callout hidden" role="status" aria-live="polite">
