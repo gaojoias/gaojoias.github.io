@@ -57,7 +57,7 @@ $sidebarCart  = store_cart_items();
       <span class="ann-sep">·</span>
       <span><i class="fa-regular fa-gem"></i> Atendimento personalizado</span>
       <span class="ann-sep">·</span>
-      <span><i class="fa-solid fa-truck"></i> Frete a combinar</span>
+      <span><i class="fa-solid fa-truck"></i> Frete grátis para todo o Brasil</span>
       <span class="ann-sep">·</span>
       <span><i class="fa-solid fa-rotate-left"></i> Trocas facilitadas</span>
     </div>
@@ -375,7 +375,7 @@ $sidebarCart  = store_cart_items();
         <span>Subtotal</span>
         <strong id="sidebar-subtotal-val"><?= store_money((int)($sidebarCart['subtotal'] ?? 0)); ?></strong>
       </div>
-      <p class="sidebar-shipping"><i class="fa-solid fa-truck"></i> Frete calculado no checkout</p>
+      <p class="sidebar-shipping"><i class="fa-solid fa-truck"></i> Frete grátis para todo o Brasil</p>
       <form class="sidebar-checkout-form" method="post" action="checkout.php">
         <input type="text" name="name" placeholder="Nome completo" required autocomplete="name">
         <input type="email" name="email" placeholder="E-mail" required autocomplete="email">
