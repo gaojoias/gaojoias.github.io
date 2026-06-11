@@ -92,6 +92,36 @@ function read_csv(string $path): array
 }
 
 /* ── import handlers ─────────────────────────────────────── */
+function unique_product_slug(PDO $pdo, string $name, ?int $excludeId = null): string
+{
+    $base   = slugify($name);
+    $slug   = $base;
+    $suffix = 1;
+    while (true) {
+        $chk = $pdo->prepare('SELECT id FROM products WHERE slug = ? LIMIT 1');
+        $chk->execute([$slug]);
+        $found = (int) $chk->fetchColumn();
+        if (!$found || $found === $excludeId) break;
+        $slug = $base . '-' . (++$suffix);
+    }
+    return $slug;
+}
+
+function unique_product_sku(PDO $pdo, string $name): string
+{
+    $base = strtoupper(substr(preg_replace('/[^a-z0-9]/i', '', $name), 0, 8));
+    $base = $base ?: 'PROD';
+    $sku  = $base;
+    $n    = 1;
+    while (true) {
+        $chk = $pdo->prepare('SELECT id FROM products WHERE sku = ? LIMIT 1');
+        $chk->execute([$sku]);
+        if (!$chk->fetchColumn()) break;
+        $sku = $base . '-' . (++$n);
+    }
+    return $sku;
+}
+
 function import_produtos(array $rows): array
 {
     $pdo      = db();
@@ -102,16 +132,18 @@ function import_produtos(array $rows): array
     $stmtCat = $pdo->prepare('SELECT id FROM product_categories WHERE name = ? LIMIT 1');
 
     foreach ($rows as $i => $r) {
-        $lineNum = $i + 2; // +2: 1-indexed + header row
+        $lineNum = $i + 2;
         $name    = $r['Nome'] ?? '';
         if (!$name) { $errors[] = "Linha {$lineNum}: Nome obrigatorio."; continue; }
 
-        $sku    = $r['SKU'] ?? '';
+        $sku    = trim($r['SKU'] ?? '');
         $price  = isset($r['Preco_BRL']) && $r['Preco_BRL'] !== '' ? parse_brl_to_cents($r['Preco_BRL']) : null;
         $cost   = isset($r['Custo_BRL']) && $r['Custo_BRL'] !== '' ? parse_brl_to_cents($r['Custo_BRL']) : null;
         $stock  = isset($r['Estoque']) && $r['Estoque'] !== '' ? (int) $r['Estoque'] : 0;
-        $status = in_array($r['Status'] ?? '', ['active', 'inactive']) ? $r['Status'] : 'active';
-        $type   = in_array($r['Tipo'] ?? '', ['product', 'service']) ? $r['Tipo'] : 'product';
+        $status = in_array($r['Status'] ?? '', ['active', 'inactive', 'draft', 'archived']) ? $r['Status'] : 'active';
+        $type   = in_array($r['Tipo'] ?? '', ['physical', 'service', 'custom', 'product']) ? $r['Tipo'] : 'physical';
+        // Normalize legacy type names from CSV template
+        if ($type === 'product') $type = 'physical';
 
         $catId = null;
         if (!empty($r['Categoria'])) {
@@ -119,27 +151,33 @@ function import_produtos(array $rows): array
             $catId = $stmtCat->fetchColumn() ?: null;
         }
 
+        // UPDATE existing product when SKU matches
         if ($sku) {
             $existing = $pdo->prepare('SELECT id FROM products WHERE sku = ? LIMIT 1');
             $existing->execute([$sku]);
-            $existingId = $existing->fetchColumn();
+            $existingId = (int) $existing->fetchColumn();
             if ($existingId) {
+                $slug = unique_product_slug($pdo, $name, $existingId);
                 $pdo->prepare(
-                    'UPDATE products SET name=?, category_id=?, price_cents=?, cost_cents=?,
+                    'UPDATE products SET name=?, slug=?, category_id=?, price_cents=?, cost_cents=?,
                      stock_qty=?, status=?, product_type=?,
                      short_description=?, description=? WHERE id=?'
-                )->execute([$name, $catId, $price, $cost, $stock, $status, $type,
+                )->execute([$name, $slug, $catId, $price, $cost, $stock, $status, $type,
                     $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '', $existingId]);
                 $updated++;
                 continue;
             }
         }
 
+        // INSERT new product
+        $finalSku  = $sku ?: unique_product_sku($pdo, $name);
+        $slug      = unique_product_slug($pdo, $name);
+
         $pdo->prepare(
-            'INSERT INTO products (sku, name, category_id, price_cents, cost_cents,
+            'INSERT INTO products (sku, name, slug, category_id, price_cents, cost_cents,
              stock_qty, status, product_type, short_description, description)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        )->execute([$sku ?: null, $name, $catId, $price, $cost, $stock, $status, $type,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$finalSku, $name, $slug, $catId, $price, $cost, $stock, $status, $type,
             $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '']);
         $inserted++;
     }
