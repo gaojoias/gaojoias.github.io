@@ -2,6 +2,14 @@
 
 declare(strict_types=1);
 
+// Capture any PHP errors/warnings as JSON so the client always gets valid JSON
+set_error_handler(static function (int $code, string $msg): bool {
+    if (!($code & error_reporting())) return false;
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'Erro interno: ' . $msg], JSON_UNESCAPED_UNICODE);
+    exit;
+});
+
 require __DIR__ . '/../app/bootstrap.php';
 
 current_admin() ?: json_response(['ok' => false, 'error' => 'Nao autenticado.'], 401);
@@ -210,23 +218,30 @@ function import_fornecedores(array $rows): array
 }
 
 /* ── run ─────────────────────────────────────────────────── */
-$rows = read_csv($path);
-if (!$rows) {
-    json_response(['ok' => false, 'error' => 'Arquivo vazio ou sem dados validos.'], 400);
+try {
+    $rows = read_csv($path);
+    if (!$rows) {
+        json_response(['ok' => false, 'error' => 'Arquivo vazio ou sem dados validos.'], 400);
+    }
+
+    $result = match($type) {
+        'produtos'     => import_produtos($rows),
+        'clientes'     => import_clientes($rows),
+        'financeiro'   => import_financeiro($rows),
+        'fornecedores' => import_fornecedores($rows),
+    };
+
+    json_response([
+        'ok'      => true,
+        'inserted' => $result['inserted'],
+        'updated'  => $result['updated'] ?? 0,
+        'errors'   => $result['errors'],
+        'warning'  => count($result['errors']) > 0 ? count($result['errors']) . ' linha(s) ignorada(s).' : null,
+    ]);
+} catch (PDOException $e) {
+    $msg = app_config('app.env') === 'local' ? $e->getMessage() : 'Erro de banco de dados.';
+    json_response(['ok' => false, 'error' => $msg], 500);
+} catch (Throwable $e) {
+    $msg = app_config('app.env') === 'local' ? $e->getMessage() : 'Erro interno.';
+    json_response(['ok' => false, 'error' => $msg], 500);
 }
-
-$result = match($type) {
-    'produtos'     => import_produtos($rows),
-    'clientes'     => import_clientes($rows),
-    'financeiro'   => import_financeiro($rows),
-    'fornecedores' => import_fornecedores($rows),
-};
-
-$ok = $result['inserted'] > 0 || $result['updated'] > 0;
-json_response([
-    'ok'       => true,
-    'inserted' => $result['inserted'],
-    'updated'  => $result['updated'] ?? 0,
-    'errors'   => $result['errors'],
-    'warning'  => count($result['errors']) > 0 ? count($result['errors']) . ' linha(s) ignorada(s).' : null,
-]);
