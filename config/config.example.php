@@ -34,4 +34,8 @@ return [
     'store' => [
         'whatsapp_number' => '5519989689260',
     ],
+    'auth' => [
+        'admin_password'    => 'CHANGE_THIS_ADMIN_PASSWORD',
+        'operator_password' => 'CHANGE_THIS_OPERATOR_PASSWORD',
+    ],
 ];

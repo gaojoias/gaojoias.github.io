@@ -4,7 +4,7 @@ Options -Indexes
 Header always set X-Content-Type-Options "nosniff"
 Header always set X-Frame-Options "SAMEORIGIN"
 Header always set Referrer-Policy "strict-origin-when-cross-origin"
-Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), serial=(self)"
 
 <FilesMatch "^(service-worker\.js|manifest\.json)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
@@ -23,4 +23,10 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
 RewriteRule ^(?:app|apps-script|config|database)(?:/|$) - [F,L,NC]
 RewriteRule ^\.(?!well-known/) - [F,L,NC]
 RewriteRule \.(?:env|ini|log|bak|old|orig|sql|sqlite|db)$ - [F,L,NC]
+
+# Admin panel at /adm — serve index.html (SPA with <base href="/">)
+RewriteRule ^adm/?$ /index.html [L]
+
+# Root → redirect to store
+RewriteRule ^$ /loja/ [R=302,L]
 </IfModule>

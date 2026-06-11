@@ -2,6 +2,7 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
+  <base href="/" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GAO Joias | Sistema Administrativo</title>
   <meta name="description" content="Sistema administrativo GAO Joias — orçamentos, vendas, financeiro e loja online." />
@@ -43,19 +44,9 @@
         </div>
       </div>
       <form id="login-form" class="login-form">
-        <div class="login-profiles" aria-label="Perfis de acesso">
-          <button class="profile-select active" type="button" data-login-user="Administrador">
-            <i class="fa-solid fa-user-shield"></i>
-            <span>Administrador</span>
-          </button>
-          <button class="profile-select" type="button" data-login-user="Operador">
-            <i class="fa-solid fa-user-gear"></i>
-            <span>Operador</span>
-          </button>
-        </div>
         <label>
-          Usuario
-          <input id="login-user" type="text" name="user" required placeholder="Administrador ou Operador" value="Administrador" />
+          Seu nome
+          <input id="login-user" type="text" name="user" required placeholder="Como você se chama?" autocomplete="name" />
         </label>
         <label>
           Senha

@@ -154,7 +154,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 header('X-Frame-Options: SAMEORIGIN');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(), serial=(self)');
 
 function app_config(?string $key = null, mixed $default = null): mixed
 {
@@ -250,20 +250,31 @@ function is_api_request(): bool
 
 function current_admin(): ?array
 {
-    if (empty($_SESSION['admin_user_id'])) {
+    if (empty($_SESSION['admin_authenticated'])) {
         return null;
     }
 
-    $stmt = db()->prepare('SELECT id, name, email, role, is_active FROM admin_users WHERE id = ? LIMIT 1');
-    $stmt->execute([(int)$_SESSION['admin_user_id']]);
-    $user = $stmt->fetch();
-
-    if (!$user || (int)$user['is_active'] !== 1) {
-        unset($_SESSION['admin_user_id']);
+    // 30-minute inactivity timeout
+    $timeout = 30 * 60;
+    if (time() - (int)($_SESSION['admin_last_activity'] ?? 0) > $timeout) {
+        unset(
+            $_SESSION['admin_authenticated'],
+            $_SESSION['admin_user_id'],
+            $_SESSION['admin_display_name'],
+            $_SESSION['admin_session_role'],
+            $_SESSION['admin_last_activity']
+        );
         return null;
     }
+    $_SESSION['admin_last_activity'] = time();
 
-    return $user;
+    return [
+        'id'        => (int)($_SESSION['admin_user_id'] ?? 0),
+        'name'      => (string)($_SESSION['admin_display_name'] ?? 'Usuario'),
+        'email'     => '',
+        'role'      => (string)($_SESSION['admin_session_role'] ?? 'operator'),
+        'is_active' => 1,
+    ];
 }
 
 function require_admin(): array
@@ -301,10 +312,10 @@ function role_label(string $role): string
 function app_user_payload(array $user): array
 {
     return [
-        'id' => (int)$user['id'],
-        'name' => $user['name'],
-        'email' => $user['email'],
-        'role' => $user['role'],
+        'id'     => (int)$user['id'],
+        'name'   => $user['name'],
+        'email'  => $user['email'] ?? '',
+        'role'   => $user['role'],
         'perfil' => role_label((string)$user['role']),
     ];
 }

@@ -4677,4 +4677,41 @@ async function init() {
   });
 }());
 
+/* ── Inactivity Auto-Logout (30 min) ─────────────────────── */
+(function setupInactivityTimer() {
+  const TIMEOUT_MS = 30 * 60 * 1000;
+  const WARNING_MS = 28 * 60 * 1000;
+  let idleTimer, warnTimer;
+
+  function isLoggedIn() {
+    return dom.loginScreen && dom.loginScreen.classList.contains('hidden');
+  }
+
+  function forceLogout() {
+    if (!isLoggedIn()) return;
+    try { apiRequest('logout').catch(() => {}); } catch (_) {}
+    state.user = null;
+    state.perfil = null;
+    state.csrfToken = '';
+    dom.appShell.classList.add('hidden');
+    dom.loginScreen.classList.remove('hidden');
+    showToast('Sessão encerrada por inatividade.', 'error');
+  }
+
+  function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    clearTimeout(warnTimer);
+    warnTimer = setTimeout(() => {
+      if (isLoggedIn()) showToast('Sessão expirando em 2 minutos por inatividade.', 'error');
+    }, WARNING_MS);
+    idleTimer = setTimeout(forceLogout, TIMEOUT_MS);
+  }
+
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach((evt) => {
+    document.addEventListener(evt, resetIdleTimer, { passive: true });
+  });
+
+  resetIdleTimer();
+}());
+
 init();

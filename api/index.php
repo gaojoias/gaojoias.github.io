@@ -28,10 +28,15 @@ try {
     }
 
     if ($action === 'login') {
-        $identifier = trim((string)($payload['user'] ?? $payload['email'] ?? ''));
+        $name     = trim((string)($payload['user'] ?? $payload['email'] ?? ''));
         $password = (string)($payload['senha'] ?? $payload['password'] ?? '');
 
-        $maxAttempts = (int)app_config('security.login_max_attempts', 8);
+        if ($name === '' || $password === '') {
+            json_response(['ok' => false, 'error' => 'Preencha todos os campos.'], 400);
+        }
+
+        // Rate limiting
+        $maxAttempts  = (int)app_config('security.login_max_attempts', 8);
         $decaySeconds = (int)app_config('security.login_decay_minutes', 15) * 60;
         $bucket = $_SESSION['login_attempts'] ?? ['count' => 0, 'first' => time()];
         if ((time() - (int)$bucket['first']) > $decaySeconds) {
@@ -41,34 +46,70 @@ try {
             json_response(['ok' => false, 'error' => 'Muitas tentativas. Aguarde alguns minutos.'], 429);
         }
 
-        $stmt = db()->prepare('SELECT * FROM admin_users WHERE (email = ? OR name = ?) AND is_active = 1 LIMIT 1');
-        $stmt->execute([$identifier, $identifier]);
-        $user = $stmt->fetch();
+        // Determine role from fixed passwords stored in config
+        $adminPwd    = (string)app_config('auth.admin_password', '');
+        $operatorPwd = (string)app_config('auth.operator_password', '');
 
-        if (!$user || !password_verify($password, (string)$user['password_hash'])) {
+        if ($adminPwd !== '' && $password === $adminPwd) {
+            $role = 'admin';
+        } elseif ($operatorPwd !== '' && $password === $operatorPwd) {
+            $role = 'operator';
+        } else {
             $bucket['count'] = (int)$bucket['count'] + 1;
             $_SESSION['login_attempts'] = $bucket;
             json_response(['ok' => false, 'error' => 'Credenciais invalidas.'], 401);
         }
 
+        // Fetch or create the system user for FK references (created_by)
+        $email = $role === 'admin' ? 'admin@gao.local' : 'operador@gao.local';
+        $pdo   = db();
+        $stmt  = $pdo->prepare('SELECT id FROM admin_users WHERE email = ? LIMIT 1');
+        $stmt->execute([$email]);
+        $systemUser = $stmt->fetch();
+        if ($systemUser) {
+            $systemUserId = (int)$systemUser['id'];
+        } else {
+            $pdo->prepare(
+                'INSERT INTO admin_users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, 1)'
+            )->execute([
+                $role === 'admin' ? 'Administrador' : 'Operador',
+                $email,
+                password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+                $role,
+            ]);
+            $systemUserId = (int)$pdo->lastInsertId();
+        }
+
+        // Establish session
         unset($_SESSION['login_attempts']);
         session_regenerate_id(true);
-        $_SESSION['admin_user_id'] = (int)$user['id'];
+        $_SESSION['admin_authenticated']  = true;
+        $_SESSION['admin_user_id']        = $systemUserId;
+        $_SESSION['admin_display_name']   = $name;
+        $_SESSION['admin_session_role']   = $role;
+        $_SESSION['admin_last_activity']  = time();
         csrf_token();
 
-        db()->prepare('UPDATE admin_users SET last_login_at = NOW() WHERE id = ?')->execute([(int)$user['id']]);
+        // Record access log
         $ua = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 190);
         $ip = substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64);
-        $log = db()->prepare(
+        $pdo->prepare(
             'INSERT INTO access_logs (admin_user_id, user_name, role_label, system_info, browser, ip_address)
              VALUES (?, ?, ?, ?, ?, ?)'
-        );
-        $log->execute([(int)$user['id'], $user['name'], role_label((string)$user['role']), PHP_OS_FAMILY, $ua, $ip]);
+        )->execute([$systemUserId, $name, role_label($role), PHP_OS_FAMILY, $ua, $ip]);
+
+        $user = [
+            'id'        => $systemUserId,
+            'name'      => $name,
+            'email'     => '',
+            'role'      => $role,
+            'is_active' => 1,
+        ];
 
         json_response([
             'ok' => true,
             'data' => [
-                'user' => app_user_payload($user),
+                'user'      => app_user_payload($user),
                 'csrfToken' => csrf_token(),
             ],
         ]);
