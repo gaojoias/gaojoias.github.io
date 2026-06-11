@@ -425,6 +425,10 @@ function admin_product_payload(array $row): array
         'imageUrl' => $primaryUrl,
         'imageUrls' => $imageUrls,
         'stripePriceId' => $row['stripe_price_id'] ?? '',
+        'weightGrams' => $row['weight_grams'] !== null ? (int)$row['weight_grams'] : null,
+        'dimensions' => $row['dimensions'] ?? '',
+        'shipping' => $row['shipping_cents'] !== null ? cents_to_decimal($row['shipping_cents']) : '',
+        'notes' => $row['notes'] ?? '',
         'createdAt' => $row['created_at'],
         'updatedAt' => $row['updated_at'],
     ];
@@ -1171,8 +1175,8 @@ function admin_create_product(array $payload, array $user): array
     db()->beginTransaction();
     try {
         $stmt = db()->prepare(
-            'INSERT INTO products (category_id, supplier_id, sku, name, slug, short_description, description, status, product_type, price_cents, compare_at_cents, cost_cents, track_stock, allow_backorder, stock_qty, low_stock_threshold, image_url, stripe_price_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO products (category_id, supplier_id, sku, name, slug, short_description, description, status, product_type, price_cents, compare_at_cents, cost_cents, shipping_cents, track_stock, allow_backorder, stock_qty, low_stock_threshold, weight_grams, dimensions, notes, image_url, stripe_price_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             admin_category_id_from_payload($payload),
@@ -1187,10 +1191,14 @@ function admin_create_product(array $payload, array $user): array
             money_to_cents($payload['price'] ?? 0),
             ($payload['compareAt'] ?? '') !== '' ? money_to_cents($payload['compareAt']) : null,
             ($payload['cost'] ?? '') !== '' ? money_to_cents($payload['cost']) : null,
+            ($payload['shipping'] ?? '') !== '' ? money_to_cents($payload['shipping']) : null,
             !empty($payload['trackStock']) ? 1 : 0,
             !empty($payload['allowBackorder']) ? 1 : 0,
             $stock,
             (int)($payload['lowStockThreshold'] ?? 2),
+            ($payload['weightGrams'] ?? '') !== '' ? (int)$payload['weightGrams'] : null,
+            trim((string)($payload['dimensions'] ?? '')) ?: null,
+            trim((string)($payload['notes'] ?? '')) ?: null,
             trim((string)($payload['imageUrl'] ?? '')) ?: null,
             trim((string)($payload['stripePriceId'] ?? '')) ?: null,
         ]);
@@ -1248,8 +1256,8 @@ function admin_update_product(array $payload, array $user): array
         $stmt = db()->prepare(
             'UPDATE products
              SET category_id = ?, supplier_id = ?, sku = ?, name = ?, slug = ?, short_description = ?, description = ?, status = ?, product_type = ?,
-                 price_cents = ?, compare_at_cents = ?, cost_cents = ?, track_stock = ?, allow_backorder = ?, stock_qty = ?,
-                 low_stock_threshold = ?, image_url = ?, stripe_price_id = ?
+                 price_cents = ?, compare_at_cents = ?, cost_cents = ?, shipping_cents = ?, track_stock = ?, allow_backorder = ?, stock_qty = ?,
+                 low_stock_threshold = ?, weight_grams = ?, dimensions = ?, notes = ?, image_url = ?, stripe_price_id = ?
              WHERE id = ?'
         );
         $stmt->execute([
@@ -1265,10 +1273,14 @@ function admin_update_product(array $payload, array $user): array
             money_to_cents($payload['price'] ?? 0),
             ($payload['compareAt'] ?? '') !== '' ? money_to_cents($payload['compareAt']) : null,
             ($payload['cost'] ?? '') !== '' ? money_to_cents($payload['cost']) : null,
+            ($payload['shipping'] ?? '') !== '' ? money_to_cents($payload['shipping']) : null,
             !empty($payload['trackStock']) ? 1 : 0,
             !empty($payload['allowBackorder']) ? 1 : 0,
             $newStock,
             (int)($payload['lowStockThreshold'] ?? 2),
+            ($payload['weightGrams'] ?? '') !== '' ? (int)$payload['weightGrams'] : null,
+            trim((string)($payload['dimensions'] ?? '')) ?: null,
+            trim((string)($payload['notes'] ?? '')) ?: null,
             trim((string)($payload['imageUrl'] ?? '')) ?: null,
             trim((string)($payload['stripePriceId'] ?? '')) ?: null,
             $id,

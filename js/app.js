@@ -3815,41 +3815,34 @@ function openOrcamentoEditor(orcamento) {
 }
 
 async function confirmVendaFromOrcamento(orcamento) {
-  const metrics = getOrcamentoMetrics(orcamento);
-  openDrawer(buildVendaComposerHtml({
-    cliente: orcamento.cliente,
-    obs: orcamento.obsPublic
-  }, `Converter Orcamento #${orcamento.numero} em venda`));
-  const form = qs('#venda-edit-form');
-  fillBuilderWithRows(form, '.items-builder[data-builder-kind="venda"]', metrics.items.map((item) => buildItemRowHtml(item)));
-  fillBuilderWithRows(form, '.payments-builder[data-builder-kind="venda"]', [buildPaymentRowHtml({
-    descricao: 'Saldo da venda',
-    valor: metrics.valor,
-    forma: 'Pix',
-    status: 'Pendente',
-    vencimento: nowIso()
-  })]);
-  renderItemsSummary(qs('.items-builder', form));
-  renderPaymentsSummary(qs('.payments-builder', form));
-  applyRoleAccess();
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    try {
-      const payload = buildVendaPayloadFromScope(form, {
-        dataHora: nowIso(),
-        cliente: orcamento.cliente,
-        obs: orcamento.obsPublic
-      });
-      await apiRequest('createVenda', payload);
-      await apiRequest('updateOrcamento', { ...orcamento, status: 'Confirmado' });
-      closeDrawer();
-      await loadAllData();
-      showToast('Venda criada e orcamento confirmado.');
-    } catch (error) {
-      showToast(error.message || 'Erro ao confirmar venda', 'error');
+  try {
+    const metrics = getOrcamentoMetrics(orcamento);
+    const items = metrics.items;
+    if (!items || items.length === 0) {
+      showToast('Orcamento sem itens — nao e possivel converter.', 'error');
+      return;
     }
-  });
+    const defaultPayment = {
+      descricao: `Orcamento #${orcamento.numero}`,
+      valor: metrics.valor,
+      forma: 'Pix',
+      status: 'Pendente',
+      vencimento: nowIso()
+    };
+    const vendaPayload = {
+      dataHora: nowIso(),
+      cliente: orcamento.cliente,
+      obs: orcamento.obsPublic || '',
+      itensJson: JSON.stringify(items),
+      pagamentosJson: JSON.stringify([defaultPayment])
+    };
+    await apiRequest('createVenda', vendaPayload);
+    await apiRequest('updateOrcamento', { ...orcamento, status: 'Confirmado' });
+    await loadAllData();
+    showToast(`Venda criada e orcamento #${orcamento.numero} confirmado.`);
+  } catch (error) {
+    showToast(error.message || 'Erro ao confirmar venda', 'error');
+  }
 }
 
 function openVendaEditor(venda) {
@@ -3914,6 +3907,8 @@ async function handleVendaSubmit(event) {
 function buildProductPayload(form) {
   const formData = new FormData(form);
   const imageUrls = formData.getAll('imageUrls[]').filter((u) => u && String(u).trim() !== '');
+  const weightRaw = formData.get('weightGrams');
+  const shippingRaw = formData.get('shipping');
   return {
     id: formData.get('id') || '',
     sku: formData.get('sku') || '',
@@ -3924,8 +3919,12 @@ function buildProductPayload(form) {
     productType: 'physical',
     price: parseNumber(formData.get('price')),
     cost: formData.get('cost') === '' ? '' : parseNumber(formData.get('cost')),
+    shipping: shippingRaw === '' || shippingRaw === null ? '' : parseNumber(shippingRaw),
     stockQty: Number(formData.get('stockQty') || 0),
     lowStockThreshold: Number(formData.get('lowStockThreshold') || 2),
+    weightGrams: weightRaw !== '' && weightRaw !== null ? Number(weightRaw) : '',
+    dimensions: formData.get('dimensions') || '',
+    notes: formData.get('notes') || '',
     imageUrl: imageUrls[0] || '',
     imageUrls: imageUrls,
     shortDescription: formData.get('shortDescription') || '',
@@ -3971,27 +3970,42 @@ function resetProductForm() {
   dom.productForm.querySelector('[name="lowStockThreshold"]').value = '2';
   const track = dom.productForm.querySelector('[name="trackStock"]');
   if (track) track.checked = true;
+  const allowBack = dom.productForm.querySelector('[name="allowBackorder"]');
+  if (allowBack) allowBack.checked = false;
+  ['weightGrams','dimensions','notes','shipping','cost','shortDescription','description','sku'].forEach((n) => {
+    const el = dom.productForm.querySelector(`[name="${n}"]`);
+    if (el) el.value = '';
+  });
   clearProductPhotos(dom.productForm);
 }
 
 function fillProductForm(product) {
   if (!dom.productForm) return;
-  dom.productForm.querySelector('[name="id"]').value = product.id || '';
-  dom.productForm.querySelector('[name="sku"]').value = product.sku || '';
-  dom.productForm.querySelector('[name="name"]').value = product.name || '';
-  dom.productForm.querySelector('[name="categoryName"]').value = product.categoryName || '';
-  dom.productForm.querySelector('[name="supplierName"]').value = product.supplierName || '';
-  dom.productForm.querySelector('[name="status"]').value = product.status || 'draft';
-  dom.productForm.querySelector('[name="price"]').value = product.price || 0;
-  dom.productForm.querySelector('[name="cost"]').value = product.cost || '';
-  dom.productForm.querySelector('[name="stockQty"]').value = product.stockQty || 0;
-  dom.productForm.querySelector('[name="lowStockThreshold"]').value = product.lowStockThreshold || 2;
-  dom.productForm.querySelector('[name="shortDescription"]').value = product.shortDescription || '';
-  dom.productForm.querySelector('[name="description"]').value = product.description || '';
-  dom.productForm.querySelector('[name="trackStock"]').checked = Boolean(product.trackStock);
-  dom.productForm.querySelector('[name="allowBackorder"]').checked = Boolean(product.allowBackorder);
+  const set = (name, val) => {
+    const el = dom.productForm.querySelector(`[name="${name}"]`);
+    if (el) el.value = val ?? '';
+  };
+  set('id',               product.id || '');
+  set('sku',              product.sku || '');
+  set('name',             product.name || '');
+  set('categoryName',     product.categoryName || '');
+  set('supplierName',     product.supplierName || '');
+  set('status',           product.status || 'draft');
+  set('price',            product.price || 0);
+  set('cost',             product.cost || '');
+  set('shipping',         product.shipping || '');
+  set('stockQty',         product.stockQty ?? 0);
+  set('lowStockThreshold',product.lowStockThreshold ?? 2);
+  set('weightGrams',      product.weightGrams ?? '');
+  set('dimensions',       product.dimensions || '');
+  set('shortDescription', product.shortDescription || '');
+  set('description',      product.description || '');
+  set('notes',            product.notes || '');
+  const trackEl = dom.productForm.querySelector('[name="trackStock"]');
+  if (trackEl) trackEl.checked = Boolean(product.trackStock);
+  const backEl = dom.productForm.querySelector('[name="allowBackorder"]');
+  if (backEl) backEl.checked = Boolean(product.allowBackorder);
   fillProductPhotos(dom.productForm, product.imageUrls || (product.imageUrl ? [product.imageUrl] : []));
-  /* scrollIntoView removed — form is now in smart modal */
 }
 
 async function handleProductSubmit(event) {
@@ -4706,6 +4720,8 @@ async function init() {
           ? `<div class="import-row-errors">${data.errors.map(escapeHtml).join('<br>')}</div>` : '';
         resultEl.innerHTML = `<i class="fa-solid fa-circle-check"></i><div class="im-body">${parts.join(' e ') || 'Concluido.'} ${rowErrors}</div>`;
         await loadAllData();
+        // auto-close: 2s on clean import, 5s when there are row errors to review
+        setTimeout(() => closeImportModal(), data.errors && data.errors.length ? 5000 : 2000);
       }
     } catch (err) {
       const resultEl = dom.importModalResult;

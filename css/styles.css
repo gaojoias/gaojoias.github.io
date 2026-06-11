@@ -1643,6 +1643,44 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 .smart-modal-body .form-actions { flex-wrap: wrap; }
 .smart-modal-body .form-actions .btn { flex: 1; justify-content: center; }
 
+/* ── Product form v2: sectioned layout ─────────── */
+.product-form-v2 { display: grid; gap: 0; }
+.pf-section { border-top: 1px solid var(--border); padding: 18px 0 6px; }
+.pf-section:first-of-type { border-top: none; padding-top: 4px; }
+.pf-section-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.pf-section-head i { font-size: 12px; }
+.product-form-v2 .form-grid { gap: 12px; }
+.product-form-v2 textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg, var(--bg));
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+.product-form-v2 textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.product-form-v2 label small.muted { display: block; margin-bottom: 4px; font-size: 11px; }
+
 /* ── Builder card: stripped, section-like ─────── */
 .smart-modal-body .builder-card {
   padding: 0;

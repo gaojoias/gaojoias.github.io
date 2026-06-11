@@ -933,27 +933,73 @@
         </div>
       </form>
 
-      <form id="product-form" class="form-grid">
+      <form id="product-form" class="product-form-v2">
         <input type="hidden" name="id" />
-        <label>SKU<input type="text" name="sku" placeholder="Ex: GAO-ALI-001" /></label>
-        <label>Nome<input type="text" name="name" required /></label>
-        <label>Categoria<input type="text" name="categoryName" id="product-category" list="product-categories" /></label>
-        <label>Fornecedor<input type="text" name="supplierName" id="product-supplier" list="supplier-datalist" placeholder="Digite ou selecione" /></label>
-        <label>Status
-          <select name="status">
-            <option value="draft">Rascunho</option>
-            <option value="active">Ativo na loja</option>
-            <option value="archived">Arquivado</option>
-          </select>
-        </label>
-        <label>Preco<input type="number" step="0.01" min="0" name="price" required /></label>
-        <label>Custo<input type="number" step="0.01" min="0" name="cost" /></label>
-        <label>Estoque<input type="number" step="1" name="stockQty" value="0" /></label>
-        <label>Alerta estoque baixo<input type="number" step="1" min="0" name="lowStockThreshold" value="2" /></label>
-        <div class="full">
-          <span class="attachment-label" style="pointer-events:none;border:none;padding:0 0 6px;background:none;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;">
-            Fotos do produto <small style="font-weight:400;text-transform:none;letter-spacing:0;">(até 5 fotos · JPG, PNG, WEBP)</small>
-          </span>
+
+        <!-- Identificação -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-tag"></i><span>Identificação</span></div>
+          <div class="form-grid">
+            <label>SKU<input type="text" name="sku" placeholder="Ex: GAO-ALI-001" /></label>
+            <label>Nome do produto<input type="text" name="name" required placeholder="Ex: Anel Solitário Ouro 18k" /></label>
+            <label>Categoria<input type="text" name="categoryName" id="product-category" list="product-categories" placeholder="Ex: Anéis" /></label>
+            <label>Fornecedor<input type="text" name="supplierName" id="product-supplier" list="supplier-datalist" placeholder="Digite ou selecione" /></label>
+            <label>Status
+              <select name="status">
+                <option value="draft">Rascunho</option>
+                <option value="active">Ativo na loja</option>
+                <option value="archived">Arquivado</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Preços -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-circle-dollar-to-slot"></i><span>Preços</span></div>
+          <div class="form-grid">
+            <label>Custo (R$)<input type="number" step="0.01" min="0" name="cost" placeholder="0,00" /></label>
+            <label>Frete (R$)<input type="number" step="0.01" min="0" name="shipping" placeholder="0,00" /></label>
+            <label>Valor de venda (R$)<input type="number" step="0.01" min="0" name="price" required placeholder="0,00" /></label>
+          </div>
+        </div>
+
+        <!-- Descrição -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-align-left"></i><span>Descrição</span></div>
+          <div class="form-grid">
+            <label class="full">Descrição curta <small class="muted">(resumo exibido na loja)</small>
+              <input type="text" name="shortDescription" maxlength="255" placeholder="Uma frase que descreve o produto" />
+            </label>
+            <label class="full">Descrição completa
+              <textarea name="description" rows="4" placeholder="Materiais, especificações técnicas, detalhes..."></textarea>
+            </label>
+          </div>
+        </div>
+
+        <!-- Logística -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-box"></i><span>Logística</span></div>
+          <div class="form-grid">
+            <label>Peso (gramas)<input type="number" step="1" min="0" name="weightGrams" placeholder="Ex: 5" /></label>
+            <label>Dimensões<input type="text" name="dimensions" placeholder="Ex: 3×2×1 cm" /></label>
+          </div>
+        </div>
+
+        <!-- Estoque -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-boxes-stacked"></i><span>Estoque</span></div>
+          <div class="form-grid">
+            <label>Quantidade em estoque<input type="number" step="1" name="stockQty" value="0" /></label>
+            <label>Alerta de estoque baixo<input type="number" step="1" min="0" name="lowStockThreshold" value="2" /></label>
+            <label><span><input type="checkbox" name="trackStock" checked /> Controlar estoque</span></label>
+            <label><span><input type="checkbox" name="allowBackorder" /> Permitir venda sem estoque</span></label>
+          </div>
+        </div>
+
+        <!-- Fotos -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-camera"></i><span>Fotos do produto</span> <small class="muted" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">(até 5 · JPG, PNG, WEBP)</small></div>
           <div class="photo-upload-grid" id="product-photos">
             <div class="photo-slot" data-slot="0">
               <input type="file" class="photo-file-input" accept="image/*" tabindex="-1" />
@@ -992,10 +1038,17 @@
             </div>
           </div>
         </div>
-        <label class="full">Resumo para loja<input type="text" name="shortDescription" maxlength="255" /></label>
-        <label class="full">Descricao<input type="text" name="description" /></label>
-        <label><span><input type="checkbox" name="trackStock" checked /> Controlar estoque</span></label>
-        <label><span><input type="checkbox" name="allowBackorder" /> Permitir venda sem estoque</span></label>
+
+        <!-- Observações -->
+        <div class="pf-section">
+          <div class="pf-section-head"><i class="fa-solid fa-note-sticky"></i><span>Observações internas</span></div>
+          <div class="form-grid">
+            <label class="full"><small class="muted">Uso interno — não aparece na loja</small>
+              <textarea name="notes" rows="3" placeholder="Notas de fornecedor, histórico, detalhes de fabricação..."></textarea>
+            </label>
+          </div>
+        </div>
+
         <datalist id="product-categories"></datalist>
         <datalist id="supplier-datalist"></datalist>
         <div class="form-actions full">
@@ -1159,7 +1212,7 @@
         'cliente-form'    : { title: 'Novo cliente',          subtitle: 'Cadastro rápido de contatos',               icon: 'fa-user-plus',           wide: false },
         'orcamento-form'  : { title: 'Novo orçamento',   subtitle: 'Monte propostas e calcule margens',              icon: 'fa-file-invoice',        wide: true  },
         'venda-form'      : { title: 'Nova venda',             subtitle: 'Registre vendas diretas ou de orçamentos',  icon: 'fa-coins',               wide: true  },
-        'product-form'    : { title: 'Cadastrar produto',      subtitle: 'Produtos publicados aparecem na loja online',   icon: 'fa-gem',                 wide: false },
+        'product-form'    : { title: 'Cadastrar produto',      subtitle: 'Produtos publicados aparecem na loja online',   icon: 'fa-gem',                 wide: true  },
         'inventory-form'  : { title: 'Ajuste de estoque',      subtitle: 'Entradas, devoluções e correção manual', icon: 'fa-boxes-stacked', wide: false },
         'financeiro-form' : { title: 'Novo lançamento',   subtitle: 'Registre entradas e saídas operacionais',   icon: 'fa-hand-holding-dollar', wide: false },
         'lembrete-form'   : { title: 'Novo lembrete',          subtitle: 'Lembretes manuais e compromissos',              icon: 'fa-bell',                wide: false },
