@@ -126,10 +126,17 @@ function app_apply_env_config(array $config): array
     return $config;
 }
 
-$configPath = __DIR__ . '/../config/config.php';
+$configPath        = __DIR__ . '/../config/config.php';
+$serverConfigPath  = __DIR__ . '/../../gaoapp_config.php'; // outside public_html, safe from git deploy
 $exampleConfigPath = __DIR__ . '/../config/config.example.php';
 app_load_env_file(__DIR__ . '/../.env');
-$config = file_exists($configPath) ? require $configPath : require $exampleConfigPath;
+if (file_exists($configPath)) {
+    $config = require $configPath;
+} elseif (file_exists($serverConfigPath)) {
+    $config = require $serverConfigPath;
+} else {
+    $config = require $exampleConfigPath;
+}
 $config = app_apply_env_config($config);
 
 date_default_timezone_set($config['app']['timezone'] ?? 'America/Sao_Paulo');
