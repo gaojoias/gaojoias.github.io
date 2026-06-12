@@ -201,8 +201,10 @@ $sidebarCart  = store_cart_items();
             ?>
             <article class="product-card">
               <div class="product-media <?= empty($product['image_url']) ? 'logo-fallback' : ''; ?>">
-                <img src="<?= e($product['image_url'] ?: '../img/gaojoias_logo.png'); ?>"
-                     alt="<?= e($product['name']); ?>" loading="lazy">
+                <a href="produto.php?slug=<?= e($product['slug']); ?>" class="product-media-link" tabindex="-1">
+                  <img src="<?= e($product['image_url'] ?: '../img/gaojoias_logo.png'); ?>"
+                       alt="<?= e($product['name']); ?>" loading="lazy">
+                </a>
                 <?php if ($catLabel): ?><span class="badge-category"><?= e($catLabel); ?></span><?php endif; ?>
                 <?php if ($isLow): ?><span class="badge-low">Últimas unidades</span><?php endif; ?>
                 <?php if ($isOut): ?><span class="badge-out">Esgotado</span><?php endif; ?>
@@ -217,7 +219,7 @@ $sidebarCart  = store_cart_items();
               </div>
               <div class="product-body">
                 <?php if ($catLabel): ?><span class="product-cat-label"><?= e($catLabel); ?></span><?php endif; ?>
-                <h3 class="product-name"><?= e($product['name']); ?></h3>
+                <h3 class="product-name"><a href="produto.php?slug=<?= e($product['slug']); ?>"><?= e($product['name']); ?></a></h3>
                 <span class="product-price"><?= store_money($product['price_cents']); ?></span>
                 <?php if ($isLow): ?>
                   <span class="product-stock-note low"><i class="fa-solid fa-circle-exclamation"></i> <?= max($available,0); ?> restante<?= max($available,0) === 1 ? '' : 's'; ?></span>
@@ -246,7 +248,7 @@ $sidebarCart  = store_cart_items();
         </div>
         <div class="mini-products">
           <?php foreach ($featured as $item): ?>
-            <a href="#produtos" class="mini-card">
+            <a href="produto.php?slug=<?= e($item['slug']); ?>" class="mini-card">
               <div class="mini-card-img">
                 <img src="<?= e($item['image_url'] ?: '../img/gaojoias_logo.png'); ?>" alt="<?= e($item['name']); ?>" loading="lazy">
               </div>
