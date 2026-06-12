@@ -7,6 +7,17 @@ function store_money(int|string|null $cents): string
     return 'R$ ' . cents_to_money($cents);
 }
 
+function store_img_url(?string $url, string $fallback = '../img/gaojoias_logo.png'): string
+{
+    if ($url === null || $url === '') {
+        return $fallback;
+    }
+    if (str_starts_with($url, 'http') || str_starts_with($url, '/') || str_starts_with($url, '../')) {
+        return $url;
+    }
+    return '../' . $url;
+}
+
 function store_whatsapp_href(string $message = 'Ola, quero falar com a GAO Joias.'): string
 {
     $number = preg_replace('/\D+/', '', (string)app_config('store.whatsapp_number', '5519989689260')) ?? '';

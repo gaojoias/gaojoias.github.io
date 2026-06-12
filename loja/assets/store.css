@@ -126,8 +126,56 @@ ul { list-style: none; margin: 0; padding: 0; }
   font-weight: 500;
   color: var(--ink-soft);
   transition: color 0.18s ease, background 0.18s ease;
+  white-space: nowrap;
 }
 .nav-link:hover { color: var(--gold-dark); background: var(--gold-dim); }
+
+/* ── NAV DROPDOWN ──────────────────────────────────────────── */
+.nav-dropdown { position: relative; }
+.nav-has-dropdown { cursor: pointer; user-select: none; }
+.nav-caret {
+  font-size: 9px;
+  transition: transform 0.22s var(--ease);
+  opacity: 0.6;
+}
+.nav-dropdown:hover .nav-caret { transform: rotate(180deg); }
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  min-width: 200px;
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--line);
+  padding: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease), visibility 0.2s;
+  z-index: 200;
+}
+.nav-dropdown:hover .nav-dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--r);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  transition: background 0.15s, color 0.15s;
+}
+.nav-dropdown-item:hover {
+  background: var(--gold-dim);
+  color: var(--gold-dark);
+}
+.nav-dropdown-item i { font-size: 12px; width: 14px; text-align: center; opacity: 0.7; }
 
 .header-actions {
   display: flex;
@@ -427,6 +475,7 @@ ul { list-style: none; margin: 0; padding: 0; }
   background: var(--white);
   border-radius: var(--r);
   overflow: hidden;
+  position: relative;
   cursor: pointer;
   box-shadow: none;
   transition: box-shadow 0.28s var(--ease), transform 0.28s var(--ease);
@@ -461,6 +510,15 @@ ul { list-style: none; margin: 0; padding: 0; }
   position: absolute;
   inset: 0;
 }
+
+/* Cover link — makes whole card clickable; CTA floats above via z-index */
+.card-cover-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.card-add-form { position: relative; z-index: 2; }
+.product-body  { position: relative; z-index: 2; }
 
 /* Card overlay action */
 .card-overlay-action {

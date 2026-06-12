@@ -113,8 +113,22 @@ $sidebarCart  = store_cart_items();
     </a>
     <nav class="store-nav" aria-label="Navegação principal">
       <a href="index.php" class="nav-link">Início</a>
-      <a href="index.php#colecoes" class="nav-link">Coleções</a>
-      <a href="index.php#produtos" class="nav-link">Joias</a>
+      <div class="nav-dropdown">
+        <a href="index.php#produtos" class="nav-link nav-has-dropdown">
+          Joias <i class="fa-solid fa-chevron-down nav-caret"></i>
+        </a>
+        <div class="nav-dropdown-menu">
+          <a href="index.php" class="nav-dropdown-item">
+            <i class="fa-regular fa-gem"></i> Todas as joias
+          </a>
+          <?php foreach (store_categories() as $cat): ?>
+            <?php if ((int)$cat['products_count'] <= 0) continue; ?>
+            <a href="index.php?categoria=<?= e($cat['slug']); ?>" class="nav-dropdown-item">
+              <?= e($cat['name']); ?>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
       <a href="<?= e($whatsappHref); ?>" target="_blank" rel="noopener" class="nav-link">Contato</a>
     </nav>
     <div class="header-actions">
@@ -170,7 +184,7 @@ $sidebarCart  = store_cart_items();
             <span class="pdp-badge low">Últimas unidades</span>
           <?php endif; ?>
           <img id="pdp-main-img" class="pdp-main-img"
-               src="<?= e($allImages[0]); ?>"
+               src="<?= e(store_img_url($allImages[0])); ?>"
                alt="<?= e($product['name']); ?>">
         </div>
         <?php if (count($allImages) > 1): ?>
@@ -178,9 +192,9 @@ $sidebarCart  = store_cart_items();
             <?php foreach ($allImages as $i => $imgUrl): ?>
               <button type="button"
                       class="pdp-thumb <?= $i === 0 ? 'active' : ''; ?>"
-                      data-src="<?= e($imgUrl); ?>"
+                      data-src="<?= e(store_img_url($imgUrl)); ?>"
                       aria-label="Foto <?= $i + 1; ?>">
-                <img src="<?= e($imgUrl); ?>" alt="Foto <?= $i + 1; ?>" loading="lazy">
+                <img src="<?= e(store_img_url($imgUrl)); ?>" alt="Foto <?= $i + 1; ?>" loading="lazy">
               </button>
             <?php endforeach; ?>
           </div>
@@ -318,11 +332,10 @@ $sidebarCart  = store_cart_items();
             $relLow   = $relTrack && $relAvail > 0 && $relAvail <= (int)$rel['low_stock_threshold'];
           ?>
             <article class="product-card">
+              <a href="produto.php?slug=<?= e($rel['slug']); ?>" class="card-cover-link" aria-label="Ver <?= e($rel['name']); ?>"></a>
               <div class="product-media <?= empty($rel['image_url']) ? 'logo-fallback' : ''; ?>">
-                <a href="produto.php?slug=<?= e($rel['slug']); ?>" class="product-media-link" tabindex="-1">
-                  <img src="<?= e($rel['image_url'] ?: '../img/gaojoias_logo.png'); ?>"
-                       alt="<?= e($rel['name']); ?>" loading="lazy">
-                </a>
+                <img src="<?= e(store_img_url($rel['image_url'])); ?>"
+                     alt="<?= e($rel['name']); ?>" loading="lazy">
                 <?php if ($rel['category_name']): ?><span class="badge-category"><?= e($rel['category_name']); ?></span><?php endif; ?>
                 <?php if ($relLow): ?><span class="badge-low">Últimas unidades</span><?php endif; ?>
                 <?php if ($relOut): ?><span class="badge-out">Esgotado</span><?php endif; ?>
@@ -337,7 +350,7 @@ $sidebarCart  = store_cart_items();
               </div>
               <div class="product-body">
                 <?php if ($rel['category_name']): ?><span class="product-cat-label"><?= e($rel['category_name']); ?></span><?php endif; ?>
-                <h3 class="product-name"><a href="produto.php?slug=<?= e($rel['slug']); ?>"><?= e($rel['name']); ?></a></h3>
+                <h3 class="product-name"><?= e($rel['name']); ?></h3>
                 <span class="product-price"><?= store_money($rel['price_cents']); ?></span>
               </div>
             </article>
@@ -419,7 +432,7 @@ $sidebarCart  = store_cart_items();
         <?php foreach ($sidebarCart['items'] as $sitem): $sp = $sitem['product']; ?>
           <li class="sidebar-item" data-product-id="<?= (int)$sp['id']; ?>">
             <div class="sidebar-item-img">
-              <img src="<?= e($sp['image_url'] ?: '../img/gaojoias_logo.png'); ?>" alt="<?= e($sp['name']); ?>">
+              <img src="<?= e(store_img_url($sp['image_url'])); ?>" alt="<?= e($sp['name']); ?>">
             </div>
             <div class="sidebar-item-info">
               <span class="sidebar-item-sku"><?= e($sp['sku']); ?></span>

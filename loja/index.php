@@ -71,8 +71,22 @@ $sidebarCart  = store_cart_items();
 
     <nav class="store-nav" aria-label="Navegação principal">
       <a href="index.php" class="nav-link">Início</a>
-      <a href="#colecoes" class="nav-link">Coleções</a>
-      <a href="#produtos" class="nav-link">Joias</a>
+      <div class="nav-dropdown">
+        <a href="#produtos" class="nav-link nav-has-dropdown">
+          Joias <i class="fa-solid fa-chevron-down nav-caret"></i>
+        </a>
+        <div class="nav-dropdown-menu">
+          <a href="index.php" class="nav-dropdown-item">
+            <i class="fa-regular fa-gem"></i> Todas as joias
+          </a>
+          <?php foreach ($categories as $cat): ?>
+            <?php if ((int)$cat['products_count'] <= 0) continue; ?>
+            <a href="index.php?categoria=<?= e($cat['slug']); ?>" class="nav-dropdown-item">
+              <?= e($cat['name']); ?>
+            </a>
+          <?php endforeach; ?>
+        </div>
+      </div>
       <a href="<?= e($whatsappHref); ?>" target="_blank" rel="noopener" class="nav-link">Contato</a>
     </nav>
 
@@ -200,11 +214,10 @@ $sidebarCart  = store_cart_items();
               $catLabel   = $product['category_name'] ?: '';
             ?>
             <article class="product-card">
+              <a href="produto.php?slug=<?= e($product['slug']); ?>" class="card-cover-link" aria-label="Ver <?= e($product['name']); ?>"></a>
               <div class="product-media <?= empty($product['image_url']) ? 'logo-fallback' : ''; ?>">
-                <a href="produto.php?slug=<?= e($product['slug']); ?>" class="product-media-link" tabindex="-1">
-                  <img src="<?= e($product['image_url'] ?: '../img/gaojoias_logo.png'); ?>"
-                       alt="<?= e($product['name']); ?>" loading="lazy">
-                </a>
+                <img src="<?= e(store_img_url($product['image_url'])); ?>"
+                     alt="<?= e($product['name']); ?>" loading="lazy">
                 <?php if ($catLabel): ?><span class="badge-category"><?= e($catLabel); ?></span><?php endif; ?>
                 <?php if ($isLow): ?><span class="badge-low">Últimas unidades</span><?php endif; ?>
                 <?php if ($isOut): ?><span class="badge-out">Esgotado</span><?php endif; ?>
@@ -219,7 +232,7 @@ $sidebarCart  = store_cart_items();
               </div>
               <div class="product-body">
                 <?php if ($catLabel): ?><span class="product-cat-label"><?= e($catLabel); ?></span><?php endif; ?>
-                <h3 class="product-name"><a href="produto.php?slug=<?= e($product['slug']); ?>"><?= e($product['name']); ?></a></h3>
+                <h3 class="product-name"><?= e($product['name']); ?></h3>
                 <span class="product-price"><?= store_money($product['price_cents']); ?></span>
                 <?php if ($isLow): ?>
                   <span class="product-stock-note low"><i class="fa-solid fa-circle-exclamation"></i> <?= max($available,0); ?> restante<?= max($available,0) === 1 ? '' : 's'; ?></span>
@@ -250,7 +263,7 @@ $sidebarCart  = store_cart_items();
           <?php foreach ($featured as $item): ?>
             <a href="produto.php?slug=<?= e($item['slug']); ?>" class="mini-card">
               <div class="mini-card-img">
-                <img src="<?= e($item['image_url'] ?: '../img/gaojoias_logo.png'); ?>" alt="<?= e($item['name']); ?>" loading="lazy">
+                <img src="<?= e(store_img_url($item['image_url'])); ?>" alt="<?= e($item['name']); ?>" loading="lazy">
               </div>
               <span class="mini-card-name"><?= e($item['name']); ?></span>
               <strong class="mini-card-price"><?= store_money($item['price_cents']); ?></strong>
@@ -342,7 +355,7 @@ $sidebarCart  = store_cart_items();
         ?>
           <li class="sidebar-item" data-product-id="<?= (int)$sp['id']; ?>">
             <div class="sidebar-item-img">
-              <img src="<?= e($sp['image_url'] ?: '../img/gaojoias_logo.png'); ?>" alt="<?= e($sp['name']); ?>">
+              <img src="<?= e(store_img_url($sp['image_url'])); ?>" alt="<?= e($sp['name']); ?>">
             </div>
             <div class="sidebar-item-info">
               <span class="sidebar-item-sku"><?= e($sp['sku']); ?></span>

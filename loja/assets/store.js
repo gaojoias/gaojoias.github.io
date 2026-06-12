@@ -86,7 +86,9 @@
 
   // ── Render sidebar items from JSON ────────────────────────────
   function imgOrFallback(url) {
-    return url || '../img/gaojoias_logo.png';
+    if (!url) return '../img/gaojoias_logo.png';
+    if (url.startsWith('http') || url.startsWith('/') || url.startsWith('../')) return url;
+    return '../' + url;
   }
 
   function renderSidebarItems(items, subtotalFmt) {
