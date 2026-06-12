@@ -1889,6 +1889,7 @@ function renderProducts() {
         <td data-label="Acoes">
           <div class="actions">
             <button class="btn btn-ghost action-btn" data-action="edit-product" data-id="${product.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-ghost action-btn danger" data-action="delete-product" data-id="${product.id}" data-name="${escapeHtml(product.name || '')}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
@@ -4028,9 +4029,21 @@ async function handleProductSubmit(event) {
 function handleProductActions(event) {
   const btn = event.target.closest('button');
   if (!btn) return;
-  if (btn.dataset.action !== 'edit-product') return;
-  const product = (state.data.produtos || []).find((item) => Number(item.id) === Number(btn.dataset.id));
-  if (product) fillProductForm(product);
+
+  if (btn.dataset.action === 'edit-product') {
+    const product = (state.data.produtos || []).find((item) => Number(item.id) === Number(btn.dataset.id));
+    if (product) fillProductForm(product);
+    return;
+  }
+
+  if (btn.dataset.action === 'delete-product') {
+    const id   = Number(btn.dataset.id);
+    const name = btn.dataset.name || 'este produto';
+    if (!confirm(`Excluir "${name}"? Esta ação não pode ser desfeita.`)) return;
+    apiRequest('deleteProduct', { id })
+      .then(() => { showToast('Produto excluído.'); return loadAllData(); })
+      .catch((err) => showToast(err.message || 'Erro ao excluir.', 'error'));
+  }
 }
 
 async function handleInventorySubmit(event) {

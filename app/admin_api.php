@@ -1401,6 +1401,26 @@ function admin_update_order(array $payload): array
     return admin_order_payload($stmt->fetch());
 }
 
+function admin_delete_product(array $payload): bool
+{
+    $id = (int)($payload['id'] ?? 0);
+    if ($id <= 0) {
+        throw new RuntimeException('ID inválido.');
+    }
+
+    db()->beginTransaction();
+    try {
+        db()->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$id]);
+        db()->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);
+        db()->commit();
+    } catch (Throwable $e) {
+        db()->rollBack();
+        throw $e;
+    }
+
+    return true;
+}
+
 function admin_handle_action(string $action, array $payload, array $user): mixed
 {
     $adminOnlyActions = [
@@ -1410,6 +1430,7 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'updateLembrete',
         'createProduct',
         'updateProduct',
+        'deleteProduct',
         'createFornecedor',
         'updateFornecedor',
         'adjustInventory',
@@ -1433,6 +1454,7 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'updateLembrete' => admin_update_reminder($payload),
         'createProduct' => admin_create_product($payload, $user),
         'updateProduct' => admin_update_product($payload, $user),
+        'deleteProduct' => admin_delete_product($payload),
         'createFornecedor' => admin_create_supplier($payload),
         'updateFornecedor' => admin_update_supplier($payload),
         'adjustInventory' => admin_adjust_inventory($payload, $user),
