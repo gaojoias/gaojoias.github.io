@@ -29,6 +29,18 @@ Troque essa senha no banco antes de publicar.
 
 Produtos aparecem na loja quando o status estiver como `Ativo na loja`. O estoque e reservado ao criar o checkout e baixado quando a Stripe confirma o pagamento pelo webhook.
 
+## Acessos administrativos
+- Administrador: usuario `Administrador` ou `admin@gao.local`.
+- Operador: usuario `Operador` ou `operador@gao.local`.
+
+As senhas iniciais estao definidas em `database/2026_05_28_admin_users.sql`. Troque-as antes de uso definitivo em producao se outras pessoas tiverem acesso ao repositorio.
+
+## Impressao no Chrome OS Flex
+- HP Deskjet 2874: use impressao normal/PDF pelo dialogo do Chrome.
+- Bematech MP-4200 HS: use `Configuracoes > Bematech MP-4200 HS`, que imprime direto via Web Serial/ESC-POS.
+
+Guia: `IMPRESSAO_CHROME_OS.md`.
+
 ## Stripe
 Configure no `.env`:
 ```env
