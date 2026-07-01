@@ -635,7 +635,8 @@ function admin_list_all(array $user): array
     $reminders = [];
     $logs = [];
     $inventory = [];
-    $orders = [];
+
+    $orders = db()->query('SELECT * FROM orders ORDER BY id DESC LIMIT 300')->fetchAll();
 
     if (admin_is_admin($user)) {
         $finance = db()->query('SELECT * FROM financial_entries ORDER BY created_at DESC, id DESC')->fetchAll();
@@ -648,7 +649,6 @@ function admin_list_all(array $user): array
              ORDER BY m.created_at DESC, m.id DESC
              LIMIT 300'
         )->fetchAll();
-        $orders = db()->query('SELECT * FROM orders ORDER BY id DESC LIMIT 300')->fetchAll();
     }
 
     return [
@@ -1428,13 +1428,7 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'updateFinanceiro',
         'createLembrete',
         'updateLembrete',
-        'createProduct',
-        'updateProduct',
-        'deleteProduct',
-        'createFornecedor',
-        'updateFornecedor',
         'adjustInventory',
-        'updateOrder',
     ];
     if (in_array($action, $adminOnlyActions, true)) {
         admin_require_admin_action($user);
