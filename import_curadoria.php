@@ -103,8 +103,8 @@ foreach ($products as $p) {
 
         // Record initial inventory
         db()->prepare(
-            'INSERT INTO inventory_movements (product_id, type, quantity, reason, before_qty, after_qty, created_at)
-             VALUES (?, \'initial\', ?, \'Estoque inicial\', 0, ?, NOW())'
+            'INSERT INTO inventory_movements (product_id, movement_type, quantity, before_qty, after_qty, reason, reference_type, reference_id, created_by)
+             VALUES (?, \'initial\', ?, 0, ?, \'Estoque inicial\', NULL, NULL, NULL)'
         )->execute([$productId, $p['stock'], $p['stock']]);
 
         // Insert all images (gallery)
