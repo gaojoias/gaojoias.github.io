@@ -1421,6 +1421,223 @@ function admin_delete_product(array $payload): bool
     return true;
 }
 
+/* ── MARKETING ────────────────────────────────────────────── */
+
+function mkt_list_all(): array
+{
+    $campaigns = db()->query(
+        'SELECT c.*,
+            COUNT(DISTINCT p.id) AS posts_count,
+            COALESCE(SUM(m.revenue_attributed_cents), 0) AS revenue_cents,
+            COALESCE(SUM(m.reach), 0) AS total_reach
+         FROM marketing_campaigns c
+         LEFT JOIN marketing_posts p ON p.campaign_id = c.id
+         LEFT JOIN marketing_metrics m ON m.post_id = p.id
+         GROUP BY c.id
+         ORDER BY c.created_at DESC'
+    )->fetchAll();
+
+    $posts = db()->query(
+        'SELECT p.*, c.name AS campaign_name
+         FROM marketing_posts p
+         LEFT JOIN marketing_campaigns c ON c.id = p.campaign_id
+         ORDER BY COALESCE(p.scheduled_at, p.created_at) DESC
+         LIMIT 500'
+    )->fetchAll();
+
+    $metrics = db()->query(
+        'SELECT * FROM marketing_metrics ORDER BY recorded_at DESC'
+    )->fetchAll();
+
+    return [
+        'campaigns' => array_map('mkt_campaign_payload', $campaigns),
+        'posts'     => array_map('mkt_post_payload', $posts),
+        'metrics'   => array_map('mkt_metrics_payload', $metrics),
+    ];
+}
+
+function mkt_campaign_payload(array $r): array
+{
+    return [
+        'id'          => (int)$r['id'],
+        'name'        => $r['name'],
+        'description' => $r['description'] ?? '',
+        'goal'        => $r['goal'],
+        'status'      => $r['status'],
+        'startDate'   => $r['start_date'] ?? '',
+        'endDate'     => $r['end_date'] ?? '',
+        'budgetCents' => (int)$r['budget_cents'],
+        'postsCount'  => (int)($r['posts_count'] ?? 0),
+        'revenueCents'=> (int)($r['revenue_cents'] ?? 0),
+        'totalReach'  => (int)($r['total_reach'] ?? 0),
+        'createdAt'   => $r['created_at'],
+    ];
+}
+
+function mkt_post_payload(array $r): array
+{
+    $urls = [];
+    if (!empty($r['image_urls'])) {
+        $decoded = json_decode($r['image_urls'], true);
+        $urls = is_array($decoded) ? $decoded : [];
+    }
+    return [
+        'id'           => (int)$r['id'],
+        'campaignId'   => $r['campaign_id'] ? (int)$r['campaign_id'] : null,
+        'campaignName' => $r['campaign_name'] ?? '',
+        'title'        => $r['title'] ?? '',
+        'caption'      => $r['caption'] ?? '',
+        'platform'     => $r['platform'],
+        'postType'     => $r['post_type'],
+        'status'       => $r['status'],
+        'scheduledAt'  => $r['scheduled_at'] ?? '',
+        'publishedAt'  => $r['published_at'] ?? '',
+        'imageUrls'    => $urls,
+        'tags'         => $r['tags'] ?? '',
+        'notes'        => $r['notes'] ?? '',
+        'createdAt'    => $r['created_at'],
+    ];
+}
+
+function mkt_metrics_payload(array $r): array
+{
+    return [
+        'id'                   => (int)$r['id'],
+        'postId'               => (int)$r['post_id'],
+        'reach'                => (int)$r['reach'],
+        'impressions'          => (int)$r['impressions'],
+        'likes'                => (int)$r['likes'],
+        'commentsCount'        => (int)$r['comments_count'],
+        'saves'                => (int)$r['saves'],
+        'shares'               => (int)$r['shares'],
+        'clicks'               => (int)$r['clicks'],
+        'profileVisits'        => (int)$r['profile_visits'],
+        'newFollowers'         => (int)$r['new_followers'],
+        'revenueAttributedCents' => (int)$r['revenue_attributed_cents'],
+        'recordedAt'           => $r['recorded_at'],
+        'notes'                => $r['notes'] ?? '',
+    ];
+}
+
+function mkt_upsert_campaign(array $payload): array
+{
+    $id   = (int)($payload['id'] ?? 0);
+    $name = trim((string)($payload['name'] ?? ''));
+    if ($name === '') json_response(['ok' => false, 'error' => 'Informe o nome da campanha.'], 422);
+
+    $goal   = in_array($payload['goal'] ?? '', ['awareness','engagement','conversion','followers','traffic'], true) ? $payload['goal'] : 'engagement';
+    $status = in_array($payload['status'] ?? '', ['draft','active','paused','completed','cancelled'], true) ? $payload['status'] : 'draft';
+    $budget = money_to_cents($payload['budget'] ?? 0);
+    $start  = to_mysql_date($payload['startDate'] ?? null);
+    $end    = to_mysql_date($payload['endDate'] ?? null);
+    $desc   = trim((string)($payload['description'] ?? '')) ?: null;
+
+    if ($id > 0) {
+        db()->prepare(
+            'UPDATE marketing_campaigns SET name=?, description=?, goal=?, status=?, start_date=?, end_date=?, budget_cents=?, updated_at=NOW() WHERE id=?'
+        )->execute([$name, $desc, $goal, $status, $start, $end, $budget, $id]);
+    } else {
+        db()->prepare(
+            'INSERT INTO marketing_campaigns (name, description, goal, status, start_date, end_date, budget_cents, created_at, updated_at) VALUES (?,?,?,?,?,?,?,NOW(),NOW())'
+        )->execute([$name, $desc, $goal, $status, $start, $end, $budget]);
+        $id = (int)db()->lastInsertId();
+    }
+    $stmt = db()->prepare('SELECT c.*, 0 AS posts_count, 0 AS revenue_cents, 0 AS total_reach FROM marketing_campaigns c WHERE c.id = ?');
+    $stmt->execute([$id]);
+    return mkt_campaign_payload($stmt->fetch());
+}
+
+function mkt_upsert_post(array $payload, array $user): array
+{
+    $id       = (int)($payload['id'] ?? 0);
+    $title    = trim((string)($payload['title'] ?? ''));
+    $caption  = trim((string)($payload['caption'] ?? '')) ?: null;
+    $platform = in_array($payload['platform'] ?? '', ['instagram','facebook','tiktok','youtube','pinterest','threads','whatsapp'], true) ? $payload['platform'] : 'instagram';
+    $type     = in_array($payload['postType'] ?? '', ['feed','story','reel','carousel','video'], true) ? $payload['postType'] : 'feed';
+    $status   = in_array($payload['status'] ?? '', ['draft','scheduled','published','cancelled'], true) ? $payload['status'] : 'draft';
+    $schAt    = to_mysql_datetime($payload['scheduledAt'] ?? null);
+    $pubAt    = to_mysql_datetime($payload['publishedAt'] ?? null);
+    $urls     = json_encode(array_values(array_filter((array)($payload['imageUrls'] ?? []))));
+    $tags     = trim((string)($payload['tags'] ?? '')) ?: null;
+    $notes    = trim((string)($payload['notes'] ?? '')) ?: null;
+    $campId   = ($payload['campaignId'] ?? '') !== '' ? (int)$payload['campaignId'] : null;
+
+    if ($id > 0) {
+        db()->prepare(
+            'UPDATE marketing_posts SET campaign_id=?, title=?, caption=?, platform=?, post_type=?, status=?, scheduled_at=?, published_at=?, image_urls=?, tags=?, notes=?, updated_at=NOW() WHERE id=?'
+        )->execute([$campId, $title, $caption, $platform, $type, $status, $schAt, $pubAt, $urls, $tags, $notes, $id]);
+    } else {
+        db()->prepare(
+            'INSERT INTO marketing_posts (campaign_id, title, caption, platform, post_type, status, scheduled_at, published_at, image_urls, tags, notes, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())'
+        )->execute([$campId, $title, $caption, $platform, $type, $status, $schAt, $pubAt, $urls, $tags, $notes, (int)$user['id']]);
+        $id = (int)db()->lastInsertId();
+    }
+    $stmt = db()->prepare('SELECT p.*, c.name AS campaign_name FROM marketing_posts p LEFT JOIN marketing_campaigns c ON c.id = p.campaign_id WHERE p.id = ?');
+    $stmt->execute([$id]);
+    return mkt_post_payload($stmt->fetch());
+}
+
+function mkt_delete_post(array $payload): bool
+{
+    $id = (int)($payload['id'] ?? 0);
+    if ($id <= 0) throw new RuntimeException('ID inválido.');
+    db()->prepare('DELETE FROM marketing_posts WHERE id = ?')->execute([$id]);
+    return true;
+}
+
+function mkt_delete_campaign(array $payload): bool
+{
+    $id = (int)($payload['id'] ?? 0);
+    if ($id <= 0) throw new RuntimeException('ID inválido.');
+    db()->beginTransaction();
+    try {
+        db()->prepare('UPDATE marketing_posts SET campaign_id = NULL WHERE campaign_id = ?')->execute([$id]);
+        db()->prepare('DELETE FROM marketing_campaigns WHERE id = ?')->execute([$id]);
+        db()->commit();
+    } catch (Throwable $e) {
+        db()->rollBack();
+        throw $e;
+    }
+    return true;
+}
+
+function mkt_save_metrics(array $payload): array
+{
+    $postId = (int)($payload['postId'] ?? 0);
+    if ($postId <= 0) json_response(['ok' => false, 'error' => 'Post inválido.'], 422);
+
+    $existingId = (int)($payload['id'] ?? 0);
+    $fields = [
+        'reach'                    => (int)($payload['reach'] ?? 0),
+        'impressions'              => (int)($payload['impressions'] ?? 0),
+        'likes'                    => (int)($payload['likes'] ?? 0),
+        'comments_count'           => (int)($payload['commentsCount'] ?? 0),
+        'saves'                    => (int)($payload['saves'] ?? 0),
+        'shares'                   => (int)($payload['shares'] ?? 0),
+        'clicks'                   => (int)($payload['clicks'] ?? 0),
+        'profile_visits'           => (int)($payload['profileVisits'] ?? 0),
+        'new_followers'            => (int)($payload['newFollowers'] ?? 0),
+        'revenue_attributed_cents' => money_to_cents($payload['revenueAttributed'] ?? 0),
+        'notes'                    => trim((string)($payload['notes'] ?? '')) ?: null,
+    ];
+
+    if ($existingId > 0) {
+        $sets = implode(', ', array_map(fn($k) => "$k = ?", array_keys($fields)));
+        $stmt = db()->prepare("UPDATE marketing_metrics SET $sets, recorded_at = NOW() WHERE id = ?");
+        $stmt->execute([...array_values($fields), $existingId]);
+        $id = $existingId;
+    } else {
+        $cols = implode(', ', array_keys($fields));
+        $phs  = implode(', ', array_fill(0, count($fields), '?'));
+        $stmt = db()->prepare("INSERT INTO marketing_metrics (post_id, $cols, recorded_at) VALUES (?, $phs, NOW())");
+        $stmt->execute([$postId, ...array_values($fields)]);
+        $id = (int)db()->lastInsertId();
+    }
+    $stmt = db()->prepare('SELECT * FROM marketing_metrics WHERE id = ?');
+    $stmt->execute([$id]);
+    return mkt_metrics_payload($stmt->fetch());
+}
+
 function admin_handle_action(string $action, array $payload, array $user): mixed
 {
     $adminOnlyActions = [
@@ -1453,6 +1670,12 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'updateFornecedor' => admin_update_supplier($payload),
         'adjustInventory' => admin_adjust_inventory($payload, $user),
         'updateOrder' => admin_update_order($payload),
+        'listMarketing'    => mkt_list_all(),
+        'upsertCampaign'   => mkt_upsert_campaign($payload),
+        'deleteCampaign'   => mkt_delete_campaign($payload),
+        'upsertPost'       => mkt_upsert_post($payload, $user),
+        'deletePost'       => mkt_delete_post($payload),
+        'saveMetrics'      => mkt_save_metrics($payload),
         default => json_response(['ok' => false, 'error' => 'Acao invalida.'], 400),
     };
 }
