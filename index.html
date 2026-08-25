@@ -607,40 +607,49 @@
 
       <!-- ── MARKETING ─────────────────────────────────── -->
       <section id="marketing" class="view">
-        <div class="panel">
+        <div class="panel mkt-panel-wrap">
+
           <!-- Sub-tabs -->
           <div class="mkt-tabs">
-            <button class="mkt-tab active" data-mkt-tab="mkt-overview"><i class="fa-solid fa-chart-pie"></i> Visão Geral</button>
-            <button class="mkt-tab" data-mkt-tab="mkt-calendario"><i class="fa-solid fa-calendar-days"></i> Calendário</button>
-            <button class="mkt-tab" data-mkt-tab="mkt-postagens"><i class="fa-solid fa-images"></i> Postagens</button>
-            <button class="mkt-tab" data-mkt-tab="mkt-campanhas"><i class="fa-solid fa-flag"></i> Campanhas</button>
+            <button class="mkt-tab active" data-mkt-tab="mkt-overview"><i class="fa-solid fa-chart-pie"></i><span>Visão Geral</span></button>
+            <button class="mkt-tab" data-mkt-tab="mkt-calendario"><i class="fa-solid fa-calendar-days"></i><span>Calendário</span></button>
+            <button class="mkt-tab" data-mkt-tab="mkt-postagens"><i class="fa-solid fa-images"></i><span>Postagens</span><span class="mkt-tab-count" id="mkt-count-posts"></span></button>
+            <button class="mkt-tab" data-mkt-tab="mkt-campanhas"><i class="fa-solid fa-flag"></i><span>Campanhas</span><span class="mkt-tab-count" id="mkt-count-camps"></span></button>
+            <button class="mkt-tab" data-mkt-tab="mkt-biblioteca"><i class="fa-solid fa-photo-film"></i><span>Biblioteca</span></button>
           </div>
 
-          <!-- OVERVIEW -->
+          <!-- ① OVERVIEW -->
           <div id="mkt-overview" class="mkt-panel active">
             <div class="mkt-kpi-row" id="mkt-kpi-row"></div>
-            <div class="mkt-two-col">
-              <div>
+            <div class="mkt-overview-body">
+              <div class="mkt-overview-main">
                 <div class="mkt-section-header">
-                  <h5><i class="fa-solid fa-clock-rotate-left"></i> Últimas postagens</h5>
+                  <h5><i class="fa-solid fa-fire"></i> Melhores postagens</h5>
+                  <button class="btn btn-ghost btn-xs mkt-new-post-btn"><i class="fa-solid fa-plus"></i> Nova</button>
                 </div>
-                <div id="mkt-recent-posts" class="mkt-recent-list"></div>
+                <div id="mkt-best-posts" class="mkt-cards-grid"></div>
               </div>
-              <div>
+              <div class="mkt-overview-side">
                 <div class="mkt-section-header">
-                  <h5><i class="fa-solid fa-flag"></i> Campanhas ativas</h5>
+                  <h5><i class="fa-solid fa-chart-column"></i> Por plataforma</h5>
                 </div>
-                <div id="mkt-active-campaigns" class="mkt-campaign-mini-list"></div>
+                <div id="mkt-platform-chart" class="mkt-platform-bars"></div>
+                <div class="mkt-section-header" style="margin-top:20px">
+                  <h5><i class="fa-solid fa-flag"></i> Campanhas ativas</h5>
+                  <button class="btn btn-ghost btn-xs mkt-new-campaign-btn"><i class="fa-solid fa-plus"></i> Nova</button>
+                </div>
+                <div id="mkt-active-campaigns"></div>
               </div>
             </div>
           </div>
 
-          <!-- CALENDAR -->
+          <!-- ② CALENDAR -->
           <div id="mkt-calendario" class="mkt-panel">
             <div class="mkt-cal-toolbar">
               <button class="btn btn-ghost btn-sm" id="mkt-cal-prev"><i class="fa-solid fa-chevron-left"></i></button>
               <strong id="mkt-cal-label">—</strong>
               <button class="btn btn-ghost btn-sm" id="mkt-cal-next"><i class="fa-solid fa-chevron-right"></i></button>
+              <div class="mkt-cal-legend" id="mkt-cal-legend"></div>
               <button class="btn btn-primary btn-sm mkt-new-post-btn" style="margin-left:auto"><i class="fa-solid fa-plus"></i> Nova postagem</button>
             </div>
             <div class="mkt-cal-grid-wrap">
@@ -651,53 +660,61 @@
             </div>
           </div>
 
-          <!-- POSTAGENS -->
+          <!-- ③ POSTAGENS -->
           <div id="mkt-postagens" class="mkt-panel">
             <div class="mkt-toolbar">
-              <select id="mkt-filter-platform" class="input-sm">
-                <option value="">Todas plataformas</option>
-                <option value="instagram">Instagram</option>
-                <option value="facebook">Facebook</option>
-                <option value="tiktok">TikTok</option>
-                <option value="youtube">YouTube</option>
-                <option value="threads">Threads</option>
-              </select>
-              <select id="mkt-filter-status" class="input-sm">
-                <option value="">Todos status</option>
-                <option value="draft">Rascunho</option>
-                <option value="scheduled">Agendado</option>
-                <option value="published">Publicado</option>
-                <option value="cancelled">Cancelado</option>
-              </select>
-              <button class="btn btn-primary btn-sm mkt-new-post-btn" style="margin-left:auto"><i class="fa-solid fa-plus"></i> Nova postagem</button>
+              <div class="mkt-status-filters" id="mkt-status-filters"></div>
+              <div class="mkt-toolbar-right">
+                <select id="mkt-filter-platform" class="input-sm">
+                  <option value="">Todas plataformas</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="threads">Threads</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+                <select id="mkt-filter-campaign" class="input-sm">
+                  <option value="">Todas campanhas</option>
+                </select>
+                <div class="mkt-view-toggle">
+                  <button class="mkt-view-btn active" data-view="grid" title="Grade"><i class="fa-solid fa-grip"></i></button>
+                  <button class="mkt-view-btn" data-view="list" title="Lista"><i class="fa-solid fa-list"></i></button>
+                </div>
+                <button class="btn btn-primary btn-sm mkt-new-post-btn"><i class="fa-solid fa-plus"></i> Nova postagem</button>
+              </div>
             </div>
-            <div class="table-wrap">
-              <table class="table" id="mkt-posts-table">
-                <thead>
-                  <tr>
-                    <th>Arte</th>
-                    <th>Título</th>
-                    <th>Plataforma</th>
-                    <th>Tipo</th>
-                    <th>Status</th>
-                    <th>Agendado para</th>
-                    <th>Campanha</th>
-                    <th>Alcance</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="mkt-posts-tbody"></tbody>
-              </table>
-            </div>
+            <div id="mkt-posts-container"></div>
           </div>
 
-          <!-- CAMPANHAS -->
+          <!-- ④ CAMPANHAS -->
           <div id="mkt-campanhas" class="mkt-panel">
             <div class="mkt-toolbar">
+              <select id="mkt-filter-camp-status" class="input-sm">
+                <option value="">Todos status</option>
+                <option value="active">Ativas</option>
+                <option value="draft">Rascunho</option>
+                <option value="paused">Pausadas</option>
+                <option value="completed">Concluídas</option>
+              </select>
               <button class="btn btn-primary btn-sm mkt-new-campaign-btn" style="margin-left:auto"><i class="fa-solid fa-plus"></i> Nova campanha</button>
             </div>
             <div id="mkt-campaigns-grid" class="mkt-campaigns-grid"></div>
           </div>
+
+          <!-- ⑤ BIBLIOTECA -->
+          <div id="mkt-biblioteca" class="mkt-panel">
+            <div class="mkt-toolbar">
+              <span class="muted" id="mkt-lib-count">—</span>
+              <label class="btn btn-primary btn-sm" style="margin-left:auto;cursor:pointer">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Upload de imagens
+                <input type="file" id="mkt-lib-upload" multiple accept="image/*" style="display:none">
+              </label>
+            </div>
+            <div id="mkt-lib-uploading" class="mkt-lib-upload-progress hidden"></div>
+            <div id="mkt-library-grid" class="mkt-library-grid"></div>
+          </div>
+
         </div>
       </section>
 
@@ -1581,5 +1598,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/app.js" defer></script>
+  <script src="js/marketing.js" defer></script>
 </body>
 </html>
