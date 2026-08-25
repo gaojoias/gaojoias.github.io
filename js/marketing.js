@@ -1038,3 +1038,6 @@ function initMktEvents() {
     if (e.target.files.length) mktUploadLibraryFiles(e.target.files);
   });
 }
+
+// Called after app.js init() since this file loads after app.js (both deferred, in-order)
+initMktEvents();

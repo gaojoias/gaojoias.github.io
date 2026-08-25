@@ -4567,7 +4567,6 @@ async function init() {
   mountStructuredForms();
   restoreThermalSettings();
   setupEvents();
-  initMktEvents();
   loadSidebarState();
   loadTheme();
   if ('serviceWorker' in navigator) {
