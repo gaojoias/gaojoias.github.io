@@ -27,8 +27,6 @@ const state = {
   marketing: { posts: [], campaigns: [], metrics: [], loaded: false },
   mktCalMonth: new Date().getMonth(),
   mktCalYear: new Date().getFullYear(),
-  servicos: [],
-  servicosLoaded: false,
   charts: {},
   dashboardPeriod: 'today',
   reminderNoticeKey: ''
@@ -171,7 +169,6 @@ const subtitles = {
   logs: 'Auditoria de acessos do sistema',
   config: 'Backend PHP, loja online e exportacoes',
   fornecedores: 'Cadastro de fornecedores e distribuidores',
-  servicos: 'Ordens de serviço — reparos e confecções para o ourives',
   marketing: 'Calendario editorial, planejamento e metricas'
 };
 
@@ -1444,9 +1441,6 @@ function switchView(viewId) {
   if (dom.sidebar.classList.contains('open')) {
     dom.sidebar.classList.remove('open');
   }
-  if (viewId === 'servicos' && !state.servicosLoaded) {
-    loadServicos();
-  }
   if (viewId === 'marketing' && !state.marketing.loaded) {
     loadMarketing();
   }
@@ -1787,6 +1781,7 @@ function renderVendas() {
               <button class="btn btn-ghost action-btn" data-action="nota" data-id="${venda.rowIndex}" title="Ver nota"><i class="fa-solid fa-receipt"></i></button>
               <button class="btn btn-ghost action-btn" data-action="edit-venda" data-id="${venda.rowIndex}" title="Editar pagamento"><i class="fa-solid fa-pen"></i></button>
               <button class="btn btn-ghost action-btn" data-action="print" data-id="${venda.rowIndex}" title="Imprimir"><i class="fa-solid fa-print"></i></button>
+              ${metrics.items.some(i => (i.tipo || '').toLowerCase().includes('servi')) ? `<button class="btn btn-ghost action-btn os-btn" data-action="os" data-id="${venda.rowIndex}" title="Ordem de Serviço para o ourives"><i class="fa-solid fa-hammer"></i></button>` : ''}
               <button class="btn btn-ghost action-btn" data-action="whatsapp" data-id="${venda.rowIndex}" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
             </div>
           </td>
@@ -2669,6 +2664,86 @@ function buildVendaDoc(venda, thermal = false) {
       </footer>
     </div>
   `;
+}
+
+function buildVendaOSSlip(venda) {
+  const metrics  = getVendaMetrics(venda);
+  const today    = new Date().toLocaleDateString('pt-BR');
+  const dataVenda = formatDateShort(venda.dataHora);
+  const serviceItems  = metrics.items.filter(i => (i.tipo || '').toLowerCase().includes('servi'));
+  const productItems  = metrics.items.filter(i => !(i.tipo || '').toLowerCase().includes('servi'));
+
+  const itemRows = (items, label) => {
+    if (!items.length) return '';
+    const rows = items.map(item => `
+      <tr>
+        <td class="os-slip-item-name">${escapeHtml(item.titulo || '—')}</td>
+        <td class="os-slip-item-desc">${escapeHtml(item.descricao || '—')}</td>
+        <td class="os-slip-item-qty">${item.quantidade}${item.unidade ? ' ' + escapeHtml(item.unidade) : ''}</td>
+      </tr>`).join('');
+    return `
+      <section class="doc-section os-slip-section">
+        <h4>${label}</h4>
+        <table class="doc-table os-slip-table">
+          <thead>
+            <tr><th>Item</th><th>Descrição</th><th>Qtd.</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>`;
+  };
+
+  return `
+    <div class="doc doc-os-slip">
+      <header class="doc-header">
+        <div class="brand-block">
+          <img src="img/logo_black.png" alt="GAO Joias" />
+          <div>
+            <div class="doc-title">Ordem de Serviço</div>
+            <div class="doc-number">#${escapeHtml(String(venda.numero || '—'))}</div>
+          </div>
+        </div>
+        <div class="os-slip-stamp">
+          <i class="fa-solid fa-hammer"></i>
+          <span>Para o Ourives</span>
+        </div>
+      </header>
+
+      <div class="doc-meta os-slip-meta">
+        <div><span>Cliente</span><strong>${escapeHtml(venda.cliente || '—')}</strong></div>
+        <div><span>Data da entrada</span><strong>${dataVenda}</strong></div>
+        <div><span>Status</span><strong>${escapeHtml(metrics.statusRecebimento || '—')}</strong></div>
+        ${venda.prazoEntrega ? `<div><span>Prazo de entrega</span><strong class="os-slip-prazo">${escapeHtml(venda.prazoEntrega)}</strong></div>` : ''}
+      </div>
+
+      ${itemRows(serviceItems, 'Serviços a realizar')}
+      ${itemRows(productItems, 'Materiais / Produtos')}
+
+      ${venda.obs ? `
+      <section class="doc-section os-slip-section">
+        <h4>Observações</h4>
+        <div class="os-slip-obs">${escapeHtml(venda.obs).replace(/\n/g, '<br>')}</div>
+      </section>` : ''}
+
+      <div class="os-slip-signatures">
+        <div class="os-sig">
+          <div class="os-sig-line"></div>
+          <span>Ourives responsável</span>
+        </div>
+        <div class="os-sig">
+          <div class="os-sig-line"></div>
+          <span>Data de conclusão</span>
+        </div>
+        <div class="os-sig">
+          <div class="os-sig-line"></div>
+          <span>Conferência / Retirada</span>
+        </div>
+      </div>
+
+      <footer class="doc-footer">
+        <span>Documento interno — GAO Joias · OS #${escapeHtml(String(venda.numero || '—'))} · Emitido em ${today} · <strong>Não contém valores</strong></span>
+      </footer>
+    </div>`;
 }
 
 async function generatePdf(html, filename) {
@@ -3626,6 +3701,24 @@ function handleVendaActions(event) {
     qs('#modal-print').addEventListener('click', () => printHtml(docHtml));
     qs('#modal-thermal').addEventListener('click', () => printThermalVenda(venda));
     qs('#modal-close').addEventListener('click', closeModal);
+  }
+
+  if (action === 'os') {
+    const slipHtml = buildVendaOSSlip(venda);
+    openModal(`
+      <div class="modal-actions">
+        <h3><i class="fa-solid fa-hammer" style="color:var(--gold);margin-right:8px"></i>OS #${venda.numero} — Nota para o Ourives</h3>
+        <div class="config-actions">
+          <button class="btn btn-primary" id="os-modal-print"><i class="fa-solid fa-print"></i><span>Imprimir</span></button>
+          <button class="btn btn-ghost"   id="os-modal-pdf"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></button>
+          <button class="icon-btn"        id="os-modal-close" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      ${slipHtml}
+    `);
+    qs('#os-modal-print').addEventListener('click', () => printHtml(slipHtml));
+    qs('#os-modal-pdf').addEventListener('click', () => generatePdf(slipHtml, `OS-${venda.numero}.pdf`));
+    qs('#os-modal-close').addEventListener('click', closeModal);
   }
 
   if (action === 'edit-venda') {

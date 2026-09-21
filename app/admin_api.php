@@ -1638,105 +1638,6 @@ function mkt_save_metrics(array $payload): array
     return mkt_metrics_payload($stmt->fetch());
 }
 
-/* ═══════════════════════════════════════════════════════════
-   ORDENS DE SERVIÇO (Reparos / Confecção — Ourives)
-   ═══════════════════════════════════════════════════════════ */
-
-function os_payload(array $r): array
-{
-    return [
-        'id'                 => (int)$r['id'],
-        'osNumber'           => $r['os_number'],
-        'customerId'         => $r['customer_id'] !== null ? (int)$r['customer_id'] : null,
-        'customerName'       => $r['customer_name'],
-        'customerPhone'      => $r['customer_phone'] ?? '',
-        'itemDescription'    => $r['item_description'],
-        'serviceDescription' => $r['service_description'],
-        'status'             => $r['status'],
-        'promisedAt'         => $r['promised_at'],
-        'priceCents'         => (int)$r['price_cents'],
-        'depositCents'       => (int)$r['deposit_cents'],
-        'notes'              => $r['notes'] ?? '',
-        'createdAt'          => $r['created_at'],
-        'updatedAt'          => $r['updated_at'],
-    ];
-}
-
-function os_list_all(): array
-{
-    $stmt = db()->query(
-        'SELECT * FROM service_orders ORDER BY
-         CASE status
-           WHEN \'Recebido\'        THEN 1
-           WHEN \'Em andamento\'    THEN 2
-           WHEN \'Aguardando peca\' THEN 3
-           WHEN \'Concluido\'       THEN 4
-           WHEN \'Entregue\'        THEN 5
-           WHEN \'Cancelado\'       THEN 6
-         END ASC, created_at DESC
-         LIMIT 500'
-    );
-    return array_map('os_payload', $stmt->fetchAll());
-}
-
-function os_upsert(array $payload, array $user): array
-{
-    $id          = (int)($payload['id'] ?? 0);
-    $custName    = trim((string)($payload['customerName'] ?? ''));
-    $itemDesc    = trim((string)($payload['itemDescription'] ?? ''));
-    $serviceDesc = trim((string)($payload['serviceDescription'] ?? ''));
-
-    if ($custName === '')    throw new RuntimeException('Informe o nome do cliente.');
-    if ($itemDesc === '')    throw new RuntimeException('Descreva o item recebido.');
-    if ($serviceDesc === '') throw new RuntimeException('Descreva o serviço a realizar.');
-
-    $statuses = ['Recebido','Em andamento','Aguardando peca','Concluido','Entregue','Cancelado'];
-    $status   = in_array($payload['status'] ?? '', $statuses, true) ? $payload['status'] : 'Recebido';
-
-    $priceCents   = money_to_cents($payload['price']   ?? 0);
-    $depositCents = money_to_cents($payload['deposit'] ?? 0);
-    $promisedAt   = to_mysql_date($payload['promisedAt'] ?? null);
-    $phone        = trim((string)($payload['customerPhone'] ?? ''));
-    $notes        = trim((string)($payload['notes'] ?? '')) ?: null;
-    $customerId   = admin_find_customer_id($custName);
-
-    if ($id > 0) {
-        db()->prepare(
-            'UPDATE service_orders
-             SET customer_id=?, customer_name=?, customer_phone=?,
-                 item_description=?, service_description=?,
-                 status=?, promised_at=?, price_cents=?, deposit_cents=?,
-                 notes=?, updated_at=NOW()
-             WHERE id=?'
-        )->execute([$customerId, $custName, $phone, $itemDesc, $serviceDesc,
-                    $status, $promisedAt, $priceCents, $depositCents, $notes, $id]);
-    } else {
-        db()->prepare(
-            'INSERT INTO service_orders
-             (customer_id, customer_name, customer_phone,
-              item_description, service_description,
-              status, promised_at, price_cents, deposit_cents,
-              notes, created_by, created_at, updated_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())'
-        )->execute([$customerId, $custName, $phone, $itemDesc, $serviceDesc,
-                    $status, $promisedAt, $priceCents, $depositCents, $notes, (int)$user['id']]);
-        $id = (int)db()->lastInsertId();
-        admin_set_public_number('service_orders', 'os_number', 'OS', $id);
-    }
-
-    $stmt = db()->prepare('SELECT * FROM service_orders WHERE id = ?');
-    $stmt->execute([$id]);
-    return os_payload($stmt->fetch());
-}
-
-function os_delete(array $payload): bool
-{
-    $id = (int)($payload['id'] ?? 0);
-    if ($id <= 0) throw new RuntimeException('ID inválido.');
-    db()->prepare('DELETE FROM service_orders WHERE id = ?')->execute([$id]);
-    return true;
-}
-
 function admin_handle_action(string $action, array $payload, array $user): mixed
 {
     $adminOnlyActions = [
@@ -1775,9 +1676,6 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'upsertPost'       => mkt_upsert_post($payload, $user),
         'deletePost'       => mkt_delete_post($payload),
         'saveMetrics'      => mkt_save_metrics($payload),
-        'listServiceOrders'  => os_list_all(),
-        'upsertServiceOrder' => os_upsert($payload, $user),
-        'deleteServiceOrder' => os_delete($payload),
         default => json_response(['ok' => false, 'error' => 'Acao invalida.'], 400),
     };
 }
