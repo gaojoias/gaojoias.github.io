@@ -177,14 +177,14 @@
             <span id="dash-dre-compare">-</span>
           </div>
           <div class="stat-card">
-            <p>Orcamentos</p>
+            <p>Orçamentos</p>
             <h3 id="dash-orcamentos">0</h3>
-            <span id="dash-conversao">Conversao 0,0%</span>
+            <span id="dash-conversao">Conversão 0,0%</span>
           </div>
           <div class="stat-card">
             <p>Vendas</p>
             <h3 id="dash-vendas">0</h3>
-            <span id="dash-ticket">Ticket medio R$ 0,00</span>
+            <span id="dash-ticket">Ticket médio R$ 0,00</span>
           </div>
           <div class="stat-card">
             <p>Aportes e outras entradas</p>
@@ -324,7 +324,7 @@
             <table class="table" id="orcamento-table">
               <thead>
                 <tr>
-                  <th>Numero</th>
+                  <th>Número</th>
                   <th>Data</th>
                   <th>Cliente</th>
                   <th>Itens</th>
@@ -361,7 +361,7 @@
             <table class="table" id="venda-table">
               <thead>
                 <tr>
-                  <th>Numero</th>
+                  <th>Número</th>
                   <th>Data</th>
                   <th>Cliente</th>
                   <th>Itens</th>
@@ -531,11 +531,11 @@
             <table class="table" id="financeiro-table">
               <thead>
                 <tr>
-                  <th>Numero</th>
+                  <th>Número</th>
                   <th>Data</th>
                   <th>Tipo</th>
                   <th>Categoria</th>
-                  <th>Descricao</th>
+                  <th>Descrição</th>
                   <th>Valor</th>
                   <th>Status</th>
                   <th>Vencimento</th>
@@ -568,8 +568,8 @@
               <thead>
                 <tr>
                   <th>Vencimento</th>
-                  <th>Titulo</th>
-                  <th>Descricao</th>
+                  <th>Título</th>
+                  <th>Descrição</th>
                   <th>Status</th>
                   <th>Origem</th>
                   <th>Acoes</th>
@@ -939,7 +939,7 @@
         <label>Email<input type="email" name="email" /></label>
         <label>Empresa<input type="text" name="empresa" /></label>
         <label>CPF/CNPJ<input type="text" name="cpfCNPJ" /></label>
-        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <label class="full">Observações<input type="text" name="obs" /></label>
         <button class="btn btn-primary" type="submit">Salvar cliente</button>
       </form>
 
@@ -956,8 +956,8 @@
             <option value="Perdido">Perdido</option>
           </select>
         </label>
-        <label>Observacao publica<input type="text" name="obsPublic" /></label>
-        <label>Observacao interna<input type="text" name="obsPrivate" data-admin /></label>
+        <label>Observação pública<input type="text" name="obsPublic" /></label>
+        <label>Observação interna<input type="text" name="obsPrivate" data-admin /></label>
         <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="0" /></label>
         <div class="full form-section-label"><span>Itens do orçamento</span></div>
         <div class="builder-card items-builder full" data-builder-kind="orcamento">
@@ -980,7 +980,7 @@
         <label>Cliente
           <select name="cliente" id="venda-cliente" required></select>
         </label>
-        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <label class="full">Observações<input type="text" name="obs" /></label>
         <div class="full form-section-label"><span>Itens da venda</span></div>
         <div class="builder-card items-builder full" data-builder-kind="venda">
           <div class="builder-head">
@@ -1207,8 +1207,8 @@
           </select>
         </label>
         <label>Vencimento<input type="date" name="vencimento" /></label>
-        <label class="full">Descricao<input type="text" name="descricao" required /></label>
-        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <label class="full">Descrição<input type="text" name="descricao" required /></label>
+        <label class="full">Observações<input type="text" name="obs" /></label>
         <div class="attachment-field full" id="financeiro-attachment-wrap">
           <label class="attachment-label">
             <i class="fa-solid fa-paperclip"></i>
@@ -1231,25 +1231,25 @@
           <option value="Aporte"></option>
           <option value="Venda avulsa"></option>
           <option value="Compra de material"></option>
-          <option value="Servico de limpeza"></option>
-          <option value="Servicos terceiros"></option>
+          <option value="Serviço de limpeza"></option>
+          <option value="Serviços terceiros"></option>
           <option value="Impostos"></option>
           <option value="Despesas gerais"></option>
         </datalist>
-        <button class="btn btn-primary" type="submit">Salvar lancamento</button>
+        <button class="btn btn-primary" type="submit">Salvar lançamento</button>
       </form>
 
       <form id="lembrete-form" class="form-grid">
-        <label>Titulo<input type="text" name="titulo" required /></label>
+        <label>Título<input type="text" name="titulo" required /></label>
         <label>Status
           <select name="status" required>
             <option value="Pendente">Pendente</option>
-            <option value="Concluido">Concluido</option>
+            <option value="Concluido">Concluído</option>
           </select>
         </label>
         <label>Vencimento<input type="date" name="vencimento" required /></label>
-        <label class="full">Descricao<input type="text" name="descricao" required /></label>
-        <label class="full">Observacoes<input type="text" name="obs" /></label>
+        <label class="full">Descrição<input type="text" name="descricao" required /></label>
+        <label class="full">Observações<input type="text" name="obs" /></label>
         <button class="btn btn-primary" type="submit">Salvar lembrete</button>
       </form>
 

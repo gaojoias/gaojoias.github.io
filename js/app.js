@@ -164,7 +164,7 @@ const subtitles = {
   vendas: 'Controle financeiro e pagamentos',
   produtos: 'Catalogo, precos e controle de inventario',
   pedidos: 'Pedidos da loja online, pagamentos e separacao',
-  financeiro: 'Fluxo de caixa, DRE e lancamentos manuais',
+  financeiro: 'Fluxo de caixa, DRE e lançamentos manuais',
   lembretes: 'Compromissos a pagar e alertas de vencimento',
   logs: 'Auditoria de acessos do sistema',
   config: 'Backend PHP, loja online e exportacoes',
@@ -172,7 +172,7 @@ const subtitles = {
   marketing: 'Calendario editorial, planejamento e metricas'
 };
 
-const ITEM_TYPES = ['Produto', 'Servico'];
+const ITEM_TYPES = ['Produto', 'Serviço'];
 const PAYMENT_METHODS = ['Pix', 'Credito', 'Debito', 'Dinheiro'];
 const PAYMENT_STATUSES = ['Pago', 'Pendente'];
 const DEFAULT_THERMAL_BAUD_RATE = 9600;
@@ -373,7 +373,7 @@ function normalizeItem(item = {}, fallbackTitle = 'Item') {
   const custoUnitario = roundCurrencyValue(item.custoUnitario);
   return {
     id: item.id || makeUid('item'),
-    tipo: ITEM_TYPES.includes(item.tipo) ? item.tipo : 'Produto',
+    tipo: ITEM_TYPES.includes(item.tipo) ? item.tipo : item.tipo === 'Servico' ? 'Serviço' : 'Produto',
     titulo: String(item.titulo || item.nome || fallbackTitle).trim(),
     descricao: String(item.descricao || '').trim(),
     quantidade,
@@ -617,10 +617,10 @@ function buildItemRowHtml(item = {}, includeCost = true) {
           ${ITEM_TYPES.map((type) => `<option value="${type}" ${type === normalized.tipo ? 'selected' : ''}>${type}</option>`).join('')}
         </select>
       </label>
-      <label>Titulo
-        <input type="text" class="item-title" value="${escapeHtml(normalized.titulo)}" placeholder="Ex: Alianca ouro 18k" ${listAttr} autocomplete="off" />
+      <label>Título
+        <input type="text" class="item-title" value="${escapeHtml(normalized.titulo)}" placeholder="Ex: Aliança ouro 18k" ${listAttr} autocomplete="off" />
       </label>
-      <label>Descricao
+      <label>Descrição
         <input type="text" class="item-description" value="${escapeHtml(normalized.descricao)}" placeholder="Detalhes do item" />
       </label>
       <label>Qtd.
@@ -642,7 +642,7 @@ function buildPaymentRowHtml(payment = {}) {
   return `
     <div class="builder-row payment-row" data-row-id="${escapeHtml(normalized.id)}">
       <input type="hidden" class="row-id" value="${escapeHtml(normalized.id)}" />
-      <label>Descricao
+      <label>Descrição
         <input type="text" class="payment-description" value="${escapeHtml(normalized.descricao)}" placeholder="Ex: Sinal, saldo, parcela 2" />
       </label>
       <label>Valor
@@ -771,7 +771,7 @@ function setItemTitleList(row, isProduct) {
     titleInput.placeholder = 'Buscar produto cadastrado ou digitar';
   } else {
     titleInput.removeAttribute('list');
-    titleInput.placeholder = 'Ex: Servico personalizado';
+    titleInput.placeholder = 'Ex: Serviço personalizado';
   }
 }
 
@@ -918,7 +918,7 @@ function buildItensTableHtml(items = [], totalLabel = 'Total') {
         <tr>
           <th>Tipo</th>
           <th>Item</th>
-          <th>Descricao</th>
+          <th>Descrição</th>
           <th>Qtd.</th>
           <th>${totalLabel}</th>
         </tr>
@@ -934,7 +934,7 @@ function buildPagamentosTableHtml(payments = []) {
     <table class="doc-table">
       <thead>
         <tr>
-          <th>Descricao</th>
+          <th>Descrição</th>
           <th>Forma</th>
           <th>Status</th>
           <th>Data</th>
@@ -1049,23 +1049,23 @@ function buildPaymentsBuilderBlockHtml() {
 
 function buildOrcamentoFormHtml(orcamento = {}) {
   return `
-    <h3>${orcamento.numero ? `Editar Orcamento #${orcamento.numero}` : 'Converter em venda'}</h3>
+    <h3>${orcamento.numero ? `Editar Orçamento #${orcamento.numero}` : 'Converter em venda'}</h3>
     <form id="orcamento-edit-form" class="form-grid">
       <label>Cliente<input type="text" name="cliente" value="${escapeHtml(orcamento.cliente || '')}" readonly /></label>
       <label>Validade<input type="date" name="validade" value="${escapeHtml(orcamento.validade || '')}" /></label>
       <label>Status
         <select name="status">
-          <option value="Em negociacao">Em negociacao</option>
+          <option value="Em negociacao">Em negociação</option>
           <option value="Enviado">Enviado</option>
           <option value="Aprovado">Aprovado</option>
           <option value="Perdido">Perdido</option>
           <option value="Confirmado">Confirmado</option>
         </select>
       </label>
-      <label>Observacao publica<input type="text" name="obsPublic" value="${escapeHtml(orcamento.obsPublic || '')}" /></label>
-      <label>Observacao interna<input type="text" name="obsPrivate" value="${escapeHtml(orcamento.obsPrivate || '')}" /></label>
+      <label>Observação pública<input type="text" name="obsPublic" value="${escapeHtml(orcamento.obsPublic || '')}" /></label>
+      <label>Observação interna<input type="text" name="obsPrivate" value="${escapeHtml(orcamento.obsPrivate || '')}" /></label>
       <label data-admin>Custos adicionais<input type="number" step="0.01" min="0" name="custoOutros" value="${roundCurrencyValue(orcamento.custoOutros)}" /></label>
-      ${buildItemsBuilderBlockHtml('orcamento', 'Itens do orcamento', 'Edite os itens, quantidades e valores do documento.')}
+      ${buildItemsBuilderBlockHtml('orcamento', 'Itens do orçamento', 'Edite os itens, quantidades e valores do documento.')}
       <button class="btn btn-primary" type="submit">Atualizar</button>
     </form>
   `;
@@ -1076,7 +1076,7 @@ function buildVendaComposerHtml(venda = {}, heading = 'Editar venda') {
     <h3>${heading}</h3>
     <form id="venda-edit-form" class="form-grid">
       <label>Cliente<input type="text" name="cliente" value="${escapeHtml(venda.cliente || '')}" readonly /></label>
-      <label class="full">Observacoes<input type="text" name="obs" value="${escapeHtml(venda.obs || '')}" /></label>
+      <label class="full">Observações<input type="text" name="obs" value="${escapeHtml(venda.obs || '')}" /></label>
       ${buildItemsBuilderBlockHtml('venda', 'Itens da venda', 'Monte os itens vendidos e seus valores unitarios.')}
       ${buildPaymentsBuilderBlockHtml()}
       <button class="btn btn-primary" type="submit">Salvar venda</button>
@@ -1113,7 +1113,7 @@ function buildOrcamentoPayloadFromScope(scope, base = {}) {
   return {
     ...base,
     cliente: qs('[name="cliente"]', scope)?.value || base.cliente || '',
-    produtoServico: summarizeItemLabel(items, base.produtoServico || 'Itens do orcamento'),
+    produtoServico: summarizeItemLabel(items, base.produtoServico || 'Itens do orçamento'),
     descricao: buildDescriptionSummary(items),
     validade: qs('[name="validade"]', scope)?.value || '',
     obsPublic: qs('[name="obsPublic"]', scope)?.value || '',
@@ -1166,7 +1166,7 @@ function mountStructuredForms() {
         <div class="builder-card items-builder full" data-builder-kind="orcamento">
           <div class="builder-head">
             <div>
-              <h5>Itens do orcamento</h5>
+              <h5>Itens do orçamento</h5>
               <p class="muted">Adicione produtos, servicos ou combinacoes no mesmo documento.</p>
             </div>
             <button type="button" class="btn btn-ghost builder-add-btn" data-action="add-item">
@@ -1227,7 +1227,7 @@ function mountStructuredForms() {
   const orcamentoHeader = qs('#orcamento-table thead tr');
   if (orcamentoHeader) {
     orcamentoHeader.innerHTML = `
-      <th>Numero</th>
+      <th>Número</th>
       <th>Data</th>
       <th>Cliente</th>
       <th>Itens</th>
@@ -1241,7 +1241,7 @@ function mountStructuredForms() {
   const vendaHeader = qs('#venda-table thead tr');
   if (vendaHeader) {
     vendaHeader.innerHTML = `
-      <th>Numero</th>
+      <th>Número</th>
       <th>Data</th>
       <th>Cliente</th>
       <th>Itens</th>
@@ -1724,7 +1724,7 @@ function renderOrcamentos() {
         : '';
       return `
         <tr>
-          <td data-label="Numero">${orcamento.numero || '-'}</td>
+          <td data-label="Número">${orcamento.numero || '-'}</td>
           <td data-label="Data">${formatDateShort(orcamento.dataHora)}</td>
           <td data-label="Cliente">${orcamento.cliente || '-'}</td>
           <td data-label="Itens">${itemLabel}</td>
@@ -1768,7 +1768,7 @@ function renderVendas() {
       const statusClass = buildPaymentStatusBadge(metrics.statusRecebimento);
       return `
         <tr>
-          <td data-label="Numero">${venda.numero || '-'}</td>
+          <td data-label="Número">${venda.numero || '-'}</td>
           <td data-label="Data">${formatDateShort(venda.dataHora)}</td>
           <td data-label="Cliente">${venda.cliente || '-'}</td>
           <td data-label="Itens">${itemLabel}</td>
@@ -1823,11 +1823,11 @@ function renderFinanceiro() {
       const canEdit = state.perfil === 'Administrador' && String(item.origem || '').toLowerCase() !== 'venda';
       return `
         <tr>
-          <td data-label="Numero">${item.numero || '-'}</td>
+          <td data-label="Número">${item.numero || '-'}</td>
           <td data-label="Data">${formatDateShort(item.dataHora)}</td>
           <td data-label="Tipo"><span class="badge ${tipoClass}">${item.tipo || '-'}</span></td>
           <td data-label="Categoria">${item.categoria || '-'}</td>
-          <td data-label="Descricao">${item.descricao || '-'}</td>
+          <td data-label="Descrição">${item.descricao || '-'}</td>
           <td data-label="Valor">${formatCurrency(item.valor || 0)}</td>
           <td data-label="Status"><span class="badge ${statusClass}">${status}</span></td>
           <td data-label="Vencimento">${formatDateShort(item.vencimento)}</td>
@@ -2024,8 +2024,8 @@ function renderLembretes(allowNotify = false) {
       return `
         <tr>
           <td data-label="Vencimento">${formatDateShort(item.vencimento)}</td>
-          <td data-label="Titulo">${item.titulo || '-'}</td>
-          <td data-label="Descricao">${item.descricao || '-'}</td>
+          <td data-label="Título">${item.titulo || '-'}</td>
+          <td data-label="Descrição">${item.descricao || '-'}</td>
           <td data-label="Status"><span class="badge ${statusClass}">${item.status || '-'}</span></td>
           <td data-label="Origem">${item.origem || '-'}</td>
           <td data-label="Acoes"><div class="actions">${actions}</div></td>
@@ -2192,8 +2192,8 @@ function renderDashboard() {
   dom.dashVendas.textContent = totalVendasAtual;
   dom.dashAportes.textContent = formatCurrency(outrasEntradasAtual);
   dom.dashMargem.textContent = formatPercent(margemAtual);
-  dom.dashTicket.textContent = `Ticket medio ${formatCurrency(ticketAtual)}`;
-  dom.dashConversao.textContent = `Conversao ${formatPercent(conversaoAtual)} (anterior ${formatPercent(conversaoAnterior)})`;
+  dom.dashTicket.textContent = `Ticket médio ${formatCurrency(ticketAtual)}`;
+  dom.dashConversao.textContent = `Conversão ${formatPercent(conversaoAtual)} (anterior ${formatPercent(conversaoAnterior)})`;
   dom.dashClientes.textContent = `${clientesAtivos} clientes no periodo`;
 
   setComparisonText(dom.dashEntradasCompare, entradasAtual, entradasAnterior);
@@ -2294,7 +2294,7 @@ function renderCharts(context) {
   updateChart('chart-orcamentos', 'bar', {
     labels: Object.keys(statusCounts).length ? Object.keys(statusCounts) : ['Sem dados'],
     datasets: [{
-      label: 'Orcamentos',
+      label: 'Orçamentos',
       data: Object.values(statusCounts).length ? Object.values(statusCounts) : [0],
       backgroundColor: ['#d9b45a', '#4dd599', '#ff6b6b', '#6aa6ff', '#8aa49c']
     }]
@@ -2580,7 +2580,7 @@ function buildOrcamentoDoc(orcamento) {
         <div class="brand-block">
           <img src="img/logo_black.png" alt="GAO Joias" />
           <div>
-            <div class="doc-title">Orcamento</div>
+            <div class="doc-title">Orçamento</div>
             <div class="doc-number">#${orcamento.numero || '-'}</div>
           </div>
         </div>
@@ -2601,12 +2601,12 @@ function buildOrcamentoDoc(orcamento) {
       </section>
       <div class="doc-total">
         <div class="total-box">
-          <span>Total do orcamento</span>
+          <span>Total do orçamento</span>
           <strong>${formatCurrency(metrics.valor)}</strong>
         </div>
       </div>
       <section class="doc-section">
-        <h4>Observacoes</h4>
+        <h4>Observações</h4>
         <p>${orcamento.obsPublic || '-'}</p>
       </section>
       <footer class="doc-footer">
@@ -2656,7 +2656,7 @@ function buildVendaDoc(venda, thermal = false) {
         </div>
       </div>
       <section class="doc-section">
-        <h4>Observacoes</h4>
+        <h4>Observações</h4>
         <p>${venda.obs || '-'}</p>
       </section>
       <footer class="doc-footer">
@@ -2795,13 +2795,13 @@ function updateThermalStatus(message, ok = false) {
   if (message) {
     dom.thermalStatus.textContent = message;
   } else if (!navigator.serial) {
-    dom.thermalStatus.textContent = 'Web Serial nao esta disponivel neste navegador. Use Chrome/Edge em HTTPS.';
+    dom.thermalStatus.textContent = 'Web Serial não está disponível neste navegador. Use Chrome/Edge em HTTPS.';
   } else if (!window.isSecureContext) {
     dom.thermalStatus.textContent = 'Web Serial exige HTTPS ou localhost. Na Hostinger, use o dominio com HTTPS.';
   } else if (thermalPrinter.connected) {
     dom.thermalStatus.textContent = `Bematech conectada em ${getThermalBaudRate()} baud.`;
   } else {
-    dom.thermalStatus.textContent = 'Bematech ainda nao conectada. Clique em Conectar Bematech.';
+    dom.thermalStatus.textContent = 'Bematech ainda não conectada. Clique em Conectar Bematech.';
   }
   dom.thermalStatus.dataset.status = ok ? 'ok' : 'warn';
 }
@@ -3520,9 +3520,9 @@ function printThermalVenda(venda) {
 
 function printThermalOrcamento(orcamento) {
   if (getThermalMode() === 'visual') {
-    return printThermalHtml(buildOrcamentoDoc(orcamento), 'do orcamento', buildThermalOrcamentoText(orcamento));
+    return printThermalHtml(buildOrcamentoDoc(orcamento), 'do orçamento', buildThermalOrcamentoText(orcamento));
   }
-  return printThermalText(buildThermalOrcamentoText(orcamento), 'do orcamento');
+  return printThermalText(buildThermalOrcamentoText(orcamento), 'do orçamento');
 }
 
 function printHtml(html, thermal = false) {
@@ -3611,7 +3611,7 @@ function handleOrcamentoActions(event) {
   if (action === 'view') {
     openModal(`
       <div class="modal-actions">
-        <h3>Orcamento #${orcamento.numero}</h3>
+        <h3>Orçamento #${orcamento.numero}</h3>
         <div class="config-actions">
           <button class="btn btn-ghost" id="modal-pdf"><i class="fa-solid fa-file-pdf"></i><span>Baixar PDF</span></button>
           <button class="btn btn-ghost" id="modal-print"><i class="fa-solid fa-print"></i><span>Imprimir</span></button>
@@ -3660,7 +3660,7 @@ async function rejectOrcamento(orcamento) {
     const index = state.data.orcamentos.findIndex((item) => item.rowIndex === orcamento.rowIndex);
     if (index >= 0) state.data.orcamentos[index] = updated;
     renderAll();
-    showToast('Orcamento recusado.');
+    showToast('Orçamento recusado.');
   } catch (error) {
     showToast(error.message || 'Erro ao recusar orcamento', 'error');
   }
@@ -3669,18 +3669,18 @@ async function rejectOrcamento(orcamento) {
 function openOrcamentoEditor(orcamento) {
   const valorAtual = parseNumber(orcamento.totalCustos) + parseNumber(orcamento.lucro);
   openDrawer(`
-    <h3>Editar Orcamento #${orcamento.numero}</h3>
+    <h3>Editar Orçamento #${orcamento.numero}</h3>
     <form id="orcamento-edit-form" class="form-grid">
       <label>Cliente<input type="text" name="cliente" value="${orcamento.cliente || ''}" readonly /></label>
-      <label>Produto/Servico<input type="text" name="produtoServico" value="${orcamento.produtoServico || ''}" required /></label>
-      <label>Descricao<input type="text" name="descricao" value="${orcamento.descricao || ''}" /></label>
+      <label>Produto/Serviço<input type="text" name="produtoServico" value="${orcamento.produtoServico || ''}" required /></label>
+      <label>Descrição<input type="text" name="descricao" value="${orcamento.descricao || ''}" /></label>
       <label>Validade<input type="date" name="validade" value="${orcamento.validade || ''}" /></label>
-      <label>Observacao publica<input type="text" name="obsPublic" value="${orcamento.obsPublic || ''}" /></label>
-      <label>Observacao interna<input type="text" name="obsPrivate" value="${orcamento.obsPrivate || ''}" /></label>
+      <label>Observação pública<input type="text" name="obsPublic" value="${orcamento.obsPublic || ''}" /></label>
+      <label>Observação interna<input type="text" name="obsPrivate" value="${orcamento.obsPrivate || ''}" /></label>
       <label>Custo material<input type="number" step="0.01" name="custoMaterial" value="${orcamento.custoMaterial || 0}" /></label>
       <label>Custo outros<input type="number" step="0.01" name="custoOutros" value="${orcamento.custoOutros || 0}" /></label>
       <label>Valor cobrado<input type="number" step="0.01" name="valorCobrado" value="${valorAtual}" /></label>
-      <label>Status\n        <select name="status">\n          <option value="Em negociacao">Em negociacao</option>\n          <option value="Enviado">Enviado</option>\n          <option value="Aprovado">Aprovado</option>\n          <option value="Perdido">Perdido</option>\n          <option value="Confirmado">Confirmado</option>\n        </select>\n      </label>
+      <label>Status\n        <select name="status">\n          <option value="Em negociacao">Em negociação</option>\n          <option value="Enviado">Enviado</option>\n          <option value="Aprovado">Aprovado</option>\n          <option value="Perdido">Perdido</option>\n          <option value="Confirmado">Confirmado</option>\n        </select>\n      </label>
       <button class="btn btn-primary" type="submit">Atualizar</button>
     </form>
   `);
@@ -3716,7 +3716,7 @@ function openOrcamentoEditor(orcamento) {
       if (index >= 0) state.data.orcamentos[index] = updated;
       closeDrawer();
       renderAll();
-      showToast('Orcamento atualizado.');
+      showToast('Orçamento atualizado.');
     } catch (error) {
       showToast(error.message || 'Erro ao atualizar orcamento', 'error');
     }
@@ -3745,7 +3745,7 @@ async function confirmVendaFromOrcamento(orcamento) {
     const index = state.data.orcamentos.findIndex((item) => item.rowIndex === orcamento.rowIndex);
     if (index >= 0) state.data.orcamentos[index] = updated;
     await loadAllData();
-    showToast('Venda criada e orcamento confirmado.');
+    showToast('Venda criada e orçamento confirmado.');
   } catch (error) {
     showToast(error.message || 'Erro ao confirmar venda', 'error');
   }
@@ -3846,8 +3846,8 @@ function openVendaEditor(venda) {
     <h3>Editar venda #${venda.numero}</h3>
     <form id="venda-edit-form" class="form-grid">
       <label>Cliente<input type="text" name="cliente" value="${venda.cliente || ''}" readonly /></label>
-      <label>Produto/Servico<input type="text" name="produtoServico" value="${venda.produtoServico || ''}" required /></label>
-      <label>Descricao<input type="text" name="descricao" value="${venda.descricao || ''}" /></label>
+      <label>Produto/Serviço<input type="text" name="produtoServico" value="${venda.produtoServico || ''}" required /></label>
+      <label>Descrição<input type="text" name="descricao" value="${venda.descricao || ''}" /></label>
       <label>Valor<input type="number" step="0.01" name="valor" value="${venda.valor || 0}" required /></label>
       <label>Custo total<input type="number" step="0.01" name="totalCustos" value="${venda.totalCustos || 0}" /></label>
       <label>Pagamento
@@ -3858,7 +3858,7 @@ function openVendaEditor(venda) {
           <option value="Débito">Débito</option>
         </select>
       </label>
-      <label class="full">Observacoes<input type="text" name="obs" value="${venda.obs || ''}" /></label>
+      <label class="full">Observações<input type="text" name="obs" value="${venda.obs || ''}" /></label>
       <button class="btn btn-primary" type="submit">Atualizar</button>
     </form>
   `);
@@ -3966,7 +3966,7 @@ async function handleOrcamentoSubmit(event) {
     state.data.orcamentos.unshift(orcamento);
     event.target.reset();
     renderAll();
-    showToast('Orcamento salvo.');
+    showToast('Orçamento salvo.');
   } catch (error) {
     showToast(error.message || 'Erro ao salvar orcamento', 'error');
   }
@@ -4019,7 +4019,7 @@ function openOrcamentoEditor(orcamento) {
       await apiRequest('updateOrcamento', updated);
       closeDrawer();
       await loadAllData();
-      showToast('Orcamento atualizado.');
+      showToast('Orçamento atualizado.');
     } catch (error) {
       showToast(error.message || 'Erro ao atualizar orcamento', 'error');
     }
@@ -4031,11 +4031,11 @@ async function confirmVendaFromOrcamento(orcamento) {
     const metrics = getOrcamentoMetrics(orcamento);
     const items = metrics.items;
     if (!items || items.length === 0) {
-      showToast('Orcamento sem itens — nao e possivel converter.', 'error');
+      showToast('Orçamento sem itens — não é possível converter.', 'error');
       return;
     }
     const defaultPayment = {
-      descricao: `Orcamento #${orcamento.numero}`,
+      descricao: `Orçamento #${orcamento.numero}`,
       valor: metrics.valor,
       forma: 'Pix',
       status: 'Pendente',
@@ -4093,7 +4093,7 @@ async function handleOrcamentoSubmit(event) {
     if (extraCostInput) extraCostInput.value = '0';
     renderItemsSummary(qs('.items-builder[data-builder-kind="orcamento"]', dom.orcamentoForm));
     renderAll();
-    showToast('Orcamento salvo.');
+    showToast('Orçamento salvo.');
   } catch (error) {
     showToast(error.message || 'Erro ao salvar orcamento', 'error');
   }
@@ -4355,7 +4355,7 @@ async function handleFinanceiroSubmit(event) {
     return;
   }
   if (String(payload.status).toLowerCase() === 'a pagar' && !payload.vencimento) {
-    showToast('Informe o vencimento para lancamentos a pagar.', 'error');
+    showToast('Informe o vencimento para lançamentos a pagar.', 'error');
     return;
   }
 
@@ -4378,7 +4378,7 @@ async function handleFinanceiroSubmit(event) {
     await loadAllData();
     showToast('Lancamento financeiro salvo.');
   } catch (error) {
-    showToast(error.message || 'Erro ao salvar lancamento', 'error');
+    showToast(error.message || 'Erro ao salvar lançamento', 'error');
   }
 }
 
@@ -4399,7 +4399,7 @@ function handleFinanceiroActions(event) {
 
 function openFinanceiroEditor(item) {
   openDrawer(`
-    <h3>Editar lancamento #${item.numero || '-'}</h3>
+    <h3>Editar lançamento #${item.numero || '-'}</h3>
     <form id="financeiro-edit-form" class="form-grid">
       <label>Data e hora<input type="datetime-local" name="dataHora" value="${toDateTimeLocalValue(item.dataHora)}" /></label>
       <label>Tipo
@@ -4417,9 +4417,9 @@ function openFinanceiroEditor(item) {
         </select>
       </label>
       <label>Vencimento<input type="date" name="vencimento" value="${formatDateISO(item.vencimento)}" /></label>
-      <label class="full">Descricao<input type="text" name="descricao" value="${item.descricao || ''}" required /></label>
-      <label class="full">Observacoes<input type="text" name="obs" value="${item.obs || ''}" /></label>
-      <button class="btn btn-primary" type="submit">Atualizar lancamento</button>
+      <label class="full">Descrição<input type="text" name="descricao" value="${item.descricao || ''}" required /></label>
+      <label class="full">Observações<input type="text" name="obs" value="${item.obs || ''}" /></label>
+      <button class="btn btn-primary" type="submit">Atualizar lançamento</button>
     </form>
   `);
 
@@ -4445,7 +4445,7 @@ function openFinanceiroEditor(item) {
       obs: formData.get('obs') || ''
     };
     if (String(updated.status).toLowerCase() === 'a pagar' && !updated.vencimento) {
-      showToast('Informe o vencimento para lancamentos a pagar.', 'error');
+      showToast('Informe o vencimento para lançamentos a pagar.', 'error');
       return;
     }
     try {
@@ -4454,7 +4454,7 @@ function openFinanceiroEditor(item) {
       await loadAllData();
       showToast('Lancamento atualizado.');
     } catch (error) {
-      showToast(error.message || 'Erro ao atualizar lancamento', 'error');
+      showToast(error.message || 'Erro ao atualizar lançamento', 'error');
     }
   });
 }
@@ -4519,7 +4519,7 @@ async function handleLembretesActions(event) {
     try {
       await apiRequest('updateLembrete', { ...lembrete, status });
       await loadAllData();
-      showToast(`Lembrete ${status === 'Concluido' ? 'concluido' : 'reaberto'}.`);
+      showToast(`Lembrete ${status === 'Concluido' ? 'concluído' : 'reaberto'}.`);
     } catch (error) {
       showToast(error.message || 'Erro ao atualizar lembrete', 'error');
     }
@@ -4530,16 +4530,16 @@ function openLembreteEditor(lembrete) {
   openDrawer(`
     <h3>Editar lembrete #${lembrete.numero || '-'}</h3>
     <form id="lembrete-edit-form" class="form-grid">
-      <label>Titulo<input type="text" name="titulo" value="${lembrete.titulo || ''}" required /></label>
+      <label>Título<input type="text" name="titulo" value="${lembrete.titulo || ''}" required /></label>
       <label>Status
         <select name="status" required>
           <option value="Pendente">Pendente</option>
-          <option value="Concluido">Concluido</option>
+          <option value="Concluido">Concluído</option>
         </select>
       </label>
       <label>Vencimento<input type="date" name="vencimento" value="${formatDateISO(lembrete.vencimento)}" required /></label>
-      <label class="full">Descricao<input type="text" name="descricao" value="${lembrete.descricao || ''}" required /></label>
-      <label class="full">Observacoes<input type="text" name="obs" value="${lembrete.obs || ''}" /></label>
+      <label class="full">Descrição<input type="text" name="descricao" value="${lembrete.descricao || ''}" required /></label>
+      <label class="full">Observações<input type="text" name="obs" value="${lembrete.obs || ''}" /></label>
       <button class="btn btn-primary" type="submit">Atualizar lembrete</button>
     </form>
   `);
