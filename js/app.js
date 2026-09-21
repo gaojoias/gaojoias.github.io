@@ -27,6 +27,8 @@ const state = {
   marketing: { posts: [], campaigns: [], metrics: [], loaded: false },
   mktCalMonth: new Date().getMonth(),
   mktCalYear: new Date().getFullYear(),
+  servicos: [],
+  servicosLoaded: false,
   charts: {},
   dashboardPeriod: 'today',
   reminderNoticeKey: ''
@@ -169,6 +171,7 @@ const subtitles = {
   logs: 'Auditoria de acessos do sistema',
   config: 'Backend PHP, loja online e exportacoes',
   fornecedores: 'Cadastro de fornecedores e distribuidores',
+  servicos: 'Ordens de serviço — reparos e confecções para o ourives',
   marketing: 'Calendario editorial, planejamento e metricas'
 };
 
@@ -1440,6 +1443,9 @@ function switchView(viewId) {
   dom.viewSubtitle.textContent = subtitles[viewId] || '';
   if (dom.sidebar.classList.contains('open')) {
     dom.sidebar.classList.remove('open');
+  }
+  if (viewId === 'servicos' && !state.servicosLoaded) {
+    loadServicos();
   }
   if (viewId === 'marketing' && !state.marketing.loaded) {
     loadMarketing();
