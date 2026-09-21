@@ -3760,6 +3760,7 @@ function handleVendaActions(event) {
   if (!venda) return;
 
   const docHtml = buildVendaDoc(venda);
+  const metrics = getVendaMetrics(venda);
   const hasService = metrics.items.some(i => (i.tipo || '').toLowerCase().includes('servi'));
   if (action === 'nota') {
     openModal(`
