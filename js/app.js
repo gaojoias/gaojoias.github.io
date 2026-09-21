@@ -1778,7 +1778,7 @@ function renderVendas() {
           <td data-label="Status"><span class="badge ${statusClass}">${metrics.statusRecebimento}</span></td>
           <td data-label="Acoes">
             <div class="actions">
-              <button class="btn btn-ghost action-btn" data-action="nota" data-id="${venda.rowIndex}" title="Ver nota"><i class="fa-solid fa-receipt"></i></button>
+              <button class="btn btn-ghost action-btn" data-action="nota" data-id="${venda.rowIndex}" title="Ver nota"><i class="fa-solid fa-eye"></i></button>
               <button class="btn btn-ghost action-btn" data-action="edit-venda" data-id="${venda.rowIndex}" title="Editar pagamento"><i class="fa-solid fa-pen"></i></button>
               <button class="btn btn-ghost action-btn" data-action="print" data-id="${venda.rowIndex}" title="Imprimir"><i class="fa-solid fa-print"></i></button>
               ${metrics.items.some(i => (i.tipo || '').toLowerCase().includes('servi')) ? `<button class="btn btn-ghost action-btn os-btn" data-action="os" data-id="${venda.rowIndex}" title="Ordem de Serviço para o ourives"><i class="fa-solid fa-hammer"></i></button>` : ''}
@@ -3760,15 +3760,17 @@ function handleVendaActions(event) {
   if (!venda) return;
 
   const docHtml = buildVendaDoc(venda);
+  const hasService = metrics.items.some(i => (i.tipo || '').toLowerCase().includes('servi'));
   if (action === 'nota') {
     openModal(`
       <div class="modal-actions">
         <h3>Nota de venda #${venda.numero}</h3>
         <div class="config-actions">
-          <button class="btn btn-ghost" id="modal-pdf"><i class="fa-solid fa-file-pdf"></i><span>Baixar PDF</span></button>
-          <button class="btn btn-ghost" id="modal-print"><i class="fa-solid fa-print"></i><span>Imprimir</span></button>
-          <button class="btn btn-ghost" id="modal-thermal"><i class="fa-solid fa-receipt"></i><span>Bematech HS</span></button>
-          <button class="icon-btn" id="modal-close" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+          <button class="icon-btn" id="modal-pdf"     title="Baixar PDF"><i class="fa-solid fa-file-pdf"></i></button>
+          <button class="icon-btn" id="modal-print"   title="Imprimir"><i class="fa-solid fa-print"></i></button>
+          <button class="icon-btn" id="modal-thermal" title="Bematech HS"><i class="fa-solid fa-receipt"></i></button>
+          ${hasService ? `<button class="icon-btn os-btn" id="modal-os" title="Ordem de Serviço — sem valores"><i class="fa-solid fa-hammer"></i></button>` : ''}
+          <button class="icon-btn" id="modal-close"   title="Fechar"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
       ${docHtml}
@@ -3776,6 +3778,30 @@ function handleVendaActions(event) {
     qs('#modal-pdf').addEventListener('click', () => generatePdf(docHtml, `nota-${venda.numero}.pdf`));
     qs('#modal-print').addEventListener('click', () => printHtml(docHtml));
     qs('#modal-thermal').addEventListener('click', () => printThermalVenda(venda));
+    if (hasService) {
+      qs('#modal-os').addEventListener('click', () => {
+        closeModal();
+        setTimeout(() => {
+          const slipHtml = buildVendaOSSlip(venda);
+          openModal(`
+            <div class="modal-actions">
+              <h3><i class="fa-solid fa-hammer" style="color:var(--gold);margin-right:8px"></i>OS #${venda.numero} — Ordem de Serviço</h3>
+              <div class="config-actions">
+                <button class="icon-btn" id="os-modal-print"   title="Imprimir"><i class="fa-solid fa-print"></i></button>
+                <button class="icon-btn" id="os-modal-pdf"     title="Baixar PDF"><i class="fa-solid fa-file-pdf"></i></button>
+                <button class="icon-btn" id="os-modal-thermal" title="Bematech HS"><i class="fa-solid fa-receipt"></i></button>
+                <button class="icon-btn" id="os-modal-close"   title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+            ${slipHtml}
+          `);
+          qs('#os-modal-print').addEventListener('click', () => printHtml(slipHtml));
+          qs('#os-modal-pdf').addEventListener('click', () => generatePdf(slipHtml, `OS-${venda.numero}.pdf`));
+          qs('#os-modal-thermal').addEventListener('click', () => printThermalOSSlip(venda));
+          qs('#os-modal-close').addEventListener('click', closeModal);
+        }, 180);
+      });
+    }
     qs('#modal-close').addEventListener('click', closeModal);
   }
 
@@ -3785,10 +3811,10 @@ function handleVendaActions(event) {
       <div class="modal-actions">
         <h3><i class="fa-solid fa-hammer" style="color:var(--gold);margin-right:8px"></i>OS #${venda.numero} — Ordem de Serviço</h3>
         <div class="config-actions">
-          <button class="btn btn-primary" id="os-modal-print"><i class="fa-solid fa-print"></i><span>Imprimir</span></button>
-          <button class="btn btn-ghost"   id="os-modal-pdf"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></button>
-          <button class="btn btn-ghost"   id="os-modal-thermal"><i class="fa-solid fa-receipt"></i><span>Bematech HS</span></button>
-          <button class="icon-btn"        id="os-modal-close" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
+          <button class="icon-btn" id="os-modal-print"   title="Imprimir"><i class="fa-solid fa-print"></i></button>
+          <button class="icon-btn" id="os-modal-pdf"     title="Baixar PDF"><i class="fa-solid fa-file-pdf"></i></button>
+          <button class="icon-btn" id="os-modal-thermal" title="Bematech HS"><i class="fa-solid fa-receipt"></i></button>
+          <button class="icon-btn" id="os-modal-close"   title="Fechar"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
       ${slipHtml}
