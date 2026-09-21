@@ -1625,7 +1625,7 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 /* ── Body (scrollable) ────────────────────────── */
 .smart-modal-body {
   overflow-y: auto;
-  overflow-x: clip;
+  overflow-x: hidden; /* hidden cria BFC e contém overflow sem mostrar scrollbar */
   padding: 22px;
   flex: 1;
   min-height: 0;
@@ -1750,11 +1750,32 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 .smart-modal-body .item-row label:nth-child(7) { flex: 0 0 98px; }
 .smart-modal-body .item-row .builder-remove-btn { align-self: flex-end; flex-shrink: 0; }
 
-/* payment-row keeps grid layout — columns sized to fit min(1100px,100vw) modal */
+/* payment-row — colapsa progressivamente para evitar overflow horizontal */
 .smart-modal-body .payment-row {
   display: grid;
-  grid-template-columns: minmax(0,2fr) 76px 82px 82px 96px 96px auto;
+  grid-template-columns: minmax(0,2fr) 74px 80px 80px 92px 92px auto;
   gap: 8px;
+}
+/* item-row dentro do smart modal: flex-wrap para nunca forçar overflow */
+.smart-modal-body .item-row {
+  min-width: 0;
+}
+.smart-modal-body .item-row label {
+  min-width: 0;
+}
+.smart-modal-body .item-row input,
+.smart-modal-body .item-row select {
+  min-width: 0;
+  width: 100%;
+}
+/* builder-card não pode expandir além do modal */
+.smart-modal-body .builder-card {
+  max-width: 100%;
+  min-width: 0;
+}
+.smart-modal-body .builder-list {
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* ── Sticky footer with primary action ────────── */
@@ -1786,6 +1807,30 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 }
 
 /* ── Responsive ───────────────────────────────── */
+
+/* 900px: colapsa datas (Vencimento + Recebido em) em colunas menores */
+@media (max-width: 900px) {
+  .smart-modal-body .payment-row {
+    grid-template-columns: minmax(0,2fr) 68px 76px 76px 84px 84px auto;
+  }
+}
+
+/* 760px: colapsa para flex-wrap em 3 por linha */
+@media (max-width: 760px) {
+  .smart-modal-body .payment-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .smart-modal-body .payment-row > label:nth-child(2) { flex: 1 1 calc(50% - 8px); }
+  .smart-modal-body .payment-row > label:nth-child(3) { flex: 0 0 80px; }
+  .smart-modal-body .payment-row > label:nth-child(4) { flex: 0 0 86px; }
+  .smart-modal-body .payment-row > label:nth-child(5) { flex: 0 0 86px; }
+  .smart-modal-body .payment-row > label:nth-child(6) { flex: 1 1 120px; }
+  .smart-modal-body .payment-row > label:nth-child(7) { flex: 1 1 120px; }
+  .smart-modal-body .payment-row > .builder-remove-btn { align-self: flex-end; }
+}
+
 @media (max-width: 640px) {
   .smart-modal { padding: 0; align-items: flex-end; }
   .smart-modal-dialog {
@@ -1798,7 +1843,12 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
   .smart-modal-header { padding: 16px 18px 14px; }
   .smart-modal-footer { padding: 12px 16px; }
   .smart-modal-body .payment-row {
-    grid-template-columns: repeat(3, 1fr) auto;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .smart-modal-body .payment-row > label,
+  .smart-modal-body .payment-row > .builder-remove-btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
   }
 }
 
