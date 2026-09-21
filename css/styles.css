@@ -1221,20 +1221,38 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
   justify-content: space-between; gap: 16px;
   margin-bottom: 16px; position: relative;
 }
-.modal-actions .icon-btn {
+/* only a direct-child icon-btn (legacy close button) gets absolute positioning */
+.modal-actions > .icon-btn {
   position: absolute; top: -16px; right: -16px;
   background: var(--surface); border: 1px solid var(--border-md);
   box-shadow: var(--shadow);
 }
-.modal-actions .icon-btn:hover {
+.modal-actions > .icon-btn:hover {
   background: var(--red-dim);
   border-color: rgba(248,113,113,0.3); color: var(--red);
 }
-[data-theme='light'] .modal-actions .icon-btn { background: #fff; border-color: rgba(0,0,0,0.12); color: var(--text); }
-[data-theme='light'] .modal-actions .icon-btn:hover {
+[data-theme='light'] .modal-actions > .icon-btn { background: #fff; border-color: rgba(0,0,0,0.12); color: var(--text); }
+[data-theme='light'] .modal-actions > .icon-btn:hover {
   background: rgba(220,78,78,0.1);
   border-color: rgba(220,78,78,0.3); color: var(--red);
 }
+/* icon-btns inside .config-actions toolbar flow naturally */
+.modal-actions .config-actions .icon-btn {
+  background: var(--surface-bright);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.modal-actions .config-actions .icon-btn:hover {
+  background: var(--surface-bright);
+  border-color: var(--border-md);
+  color: var(--text);
+}
+.modal-actions .config-actions .icon-btn:last-child:hover {
+  background: var(--red-dim);
+  border-color: rgba(248,113,113,0.3);
+  color: var(--red);
+}
+[data-theme='light'] .modal-actions .config-actions .icon-btn { background: #f5f5f3; border-color: rgba(0,0,0,0.1); color: var(--text); }
 [data-theme='light'] .modal-actions .btn-ghost {
   background: rgba(0,0,0,0.04); color: var(--text);
 }
