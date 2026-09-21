@@ -2705,7 +2705,6 @@ function buildVendaOSSlip(venda) {
         </div>
         <div class="os-slip-stamp">
           <i class="fa-solid fa-hammer"></i>
-          <span>Para o Ourives</span>
         </div>
       </header>
 
@@ -2946,6 +2945,76 @@ function buildThermalItensLines(items = []) {
     lines.pop();
   }
   return lines;
+}
+
+function buildThermalOSSlipText(venda) {
+  const metrics = getVendaMetrics(venda);
+  const serviceItems = metrics.items.filter(i => (i.tipo || '').toLowerCase().includes('servi'));
+  const productItems = metrics.items.filter(i => !(i.tipo || '').toLowerCase().includes('servi'));
+  const lines = [
+    centerThermalText('GAO JOIAS'),
+    centerThermalText('ORDEM DE SERVICO'),
+    thermalLine('='),
+    centerThermalText(`OS #${printerText(venda.numero || '-')}`),
+    thermalLine('-'),
+    twoColumnThermal('Cliente', printerText(venda.cliente || '-')),
+    twoColumnThermal('Data', printerText(formatDateShort(venda.dataHora))),
+    twoColumnThermal('Status', printerText(metrics.statusRecebimento || '-')),
+    thermalLine('='),
+  ];
+
+  if (serviceItems.length) {
+    lines.push(centerThermalText('SERVICOS'));
+    lines.push(thermalLine('-'));
+    serviceItems.forEach((item, idx) => {
+      const num = String(idx + 1).padStart(2, '0');
+      wrapThermalText(item.titulo || 'Item', 39).forEach((l, li) => {
+        lines.push(li === 0 ? `${num} ${l}`.slice(0, 42) : `   ${l}`.slice(0, 42));
+      });
+      if (item.descricao) {
+        wrapThermalText(item.descricao, 40).forEach(l => lines.push(`   ${l}`.slice(0, 42)));
+      }
+      lines.push(twoColumnThermal('   Qtd.', String(item.quantidade || 1)));
+      lines.push(thermalLine('.'));
+    });
+    if (lines.at(-1) === thermalLine('.')) lines.pop();
+    lines.push(thermalLine('-'));
+  }
+
+  if (productItems.length) {
+    lines.push(centerThermalText('MATERIAIS / PRODUTOS'));
+    lines.push(thermalLine('-'));
+    productItems.forEach((item, idx) => {
+      const num = String(idx + 1).padStart(2, '0');
+      wrapThermalText(item.titulo || 'Item', 39).forEach((l, li) => {
+        lines.push(li === 0 ? `${num} ${l}`.slice(0, 42) : `   ${l}`.slice(0, 42));
+      });
+      lines.push(twoColumnThermal('   Qtd.', String(item.quantidade || 1)));
+    });
+    lines.push(thermalLine('-'));
+  }
+
+  if (venda.obs) {
+    lines.push(centerThermalText('OBSERVACOES'));
+    lines.push(thermalLine('-'));
+    wrapThermalText(venda.obs, 42).forEach(l => lines.push(l));
+    lines.push(thermalLine('-'));
+  }
+
+  lines.push('');
+  lines.push(centerThermalText('Assinatura Ourives'));
+  lines.push('');
+  lines.push(thermalLine('_'));
+  lines.push('');
+  lines.push(centerThermalText('Data de conclusao'));
+  lines.push('');
+  lines.push(thermalLine('_'));
+  lines.push('');
+  lines.push(thermalLine('='));
+  lines.push(centerThermalText('Documento interno - sem valores'));
+  lines.push(centerThermalText('GAO Joias'));
+
+  return lines.join('\n');
 }
 
 function buildThermalVendaText(venda) {
@@ -3435,6 +3504,13 @@ async function printThermalHtml(html, label = 'cupom', fallbackText = '') {
   }
 }
 
+function printThermalOSSlip(venda) {
+  if (getThermalMode() === 'visual') {
+    return printThermalHtml(buildVendaOSSlip(venda), 'da OS', buildThermalOSSlipText(venda));
+  }
+  return printThermalText(buildThermalOSSlipText(venda), 'da OS');
+}
+
 function printThermalVenda(venda) {
   if (getThermalMode() === 'visual') {
     return printThermalHtml(buildVendaDoc(venda, true), 'da venda', buildThermalVendaText(venda));
@@ -3707,10 +3783,11 @@ function handleVendaActions(event) {
     const slipHtml = buildVendaOSSlip(venda);
     openModal(`
       <div class="modal-actions">
-        <h3><i class="fa-solid fa-hammer" style="color:var(--gold);margin-right:8px"></i>OS #${venda.numero} — Nota para o Ourives</h3>
+        <h3><i class="fa-solid fa-hammer" style="color:var(--gold);margin-right:8px"></i>OS #${venda.numero} — Ordem de Serviço</h3>
         <div class="config-actions">
           <button class="btn btn-primary" id="os-modal-print"><i class="fa-solid fa-print"></i><span>Imprimir</span></button>
           <button class="btn btn-ghost"   id="os-modal-pdf"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></button>
+          <button class="btn btn-ghost"   id="os-modal-thermal"><i class="fa-solid fa-receipt"></i><span>Bematech HS</span></button>
           <button class="icon-btn"        id="os-modal-close" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
         </div>
       </div>
@@ -3718,6 +3795,7 @@ function handleVendaActions(event) {
     `);
     qs('#os-modal-print').addEventListener('click', () => printHtml(slipHtml));
     qs('#os-modal-pdf').addEventListener('click', () => generatePdf(slipHtml, `OS-${venda.numero}.pdf`));
+    qs('#os-modal-thermal').addEventListener('click', () => printThermalOSSlip(venda));
     qs('#os-modal-close').addEventListener('click', closeModal);
   }
 
