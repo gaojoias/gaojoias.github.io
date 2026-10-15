@@ -1378,6 +1378,55 @@ function admin_adjust_inventory(array $payload, array $user): array
     return admin_get_product($productId);
 }
 
+function admin_bulk_adjust_inventory(array $payload, array $user): array
+{
+    $items = $payload['items'] ?? [];
+    if (!is_array($items) || empty($items)) {
+        json_response(['ok' => false, 'error' => 'Nenhum item informado.'], 422);
+    }
+    $reason = trim((string)($payload['reason'] ?? 'Atualização em lote'));
+    $mode = ($payload['mode'] ?? 'set'); // 'set' = absolute, 'adjust' = relative
+
+    db()->beginTransaction();
+    try {
+        $updated = 0;
+        foreach ($items as $entry) {
+            $productId = (int)($entry['productId'] ?? 0);
+            $qty = (int)($entry['quantity'] ?? 0);
+            if ($productId <= 0) continue;
+
+            $stmt = db()->prepare('SELECT id, stock_qty FROM products WHERE id = ? FOR UPDATE');
+            $stmt->execute([$productId]);
+            $product = $stmt->fetch();
+            if (!$product) continue;
+
+            $before = (int)$product['stock_qty'];
+            $after = $mode === 'set' ? $qty : $before + $qty;
+            if ($after < 0) $after = 0;
+            if ($after === $before) continue;
+
+            db()->prepare('UPDATE products SET stock_qty = ? WHERE id = ?')->execute([$after, $productId]);
+            admin_record_inventory_movement(
+                $productId,
+                'adjustment',
+                $after - $before,
+                $reason,
+                'manual',
+                null,
+                (int)$user['id'],
+                $before
+            );
+            $updated++;
+        }
+        db()->commit();
+    } catch (Throwable $e) {
+        if (db()->inTransaction()) db()->rollBack();
+        throw $e;
+    }
+
+    return ['ok' => true, 'updated' => $updated];
+}
+
 function admin_update_order(array $payload): array
 {
     $id = (int)($payload['id'] ?? $payload['rowIndex'] ?? 0);
@@ -1646,6 +1695,7 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'createLembrete',
         'updateLembrete',
         'adjustInventory',
+        'bulkAdjustInventory',
     ];
     if (in_array($action, $adminOnlyActions, true)) {
         admin_require_admin_action($user);
@@ -1669,6 +1719,7 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'createFornecedor' => admin_create_supplier($payload),
         'updateFornecedor' => admin_update_supplier($payload),
         'adjustInventory' => admin_adjust_inventory($payload, $user),
+        'bulkAdjustInventory' => admin_bulk_adjust_inventory($payload, $user),
         'updateOrder' => admin_update_order($payload),
         'listMarketing'    => mkt_list_all(),
         'upsertCampaign'   => mkt_upsert_campaign($payload),

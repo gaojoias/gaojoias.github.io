@@ -381,7 +381,7 @@
       <section id="produtos" class="view">
         <div class="panel">
           <div class="panel-header">
-            <h4>Produtos e inventario</h4>
+            <h4>Produtos e inventário</h4>
             <div class="panel-actions">
               <button class="btn btn-primary" data-open-modal="product-form">
                 <i class="fa-solid fa-gem"></i><span>Novo produto</span>
@@ -389,9 +389,17 @@
               <button class="btn btn-ghost" data-open-modal="inventory-form">
                 <i class="fa-solid fa-boxes-stacked"></i><span>Ajuste de estoque</span>
               </button>
+              <button class="btn btn-ghost" id="bulk-stock-btn">
+                <i class="fa-solid fa-pen-to-square"></i><span>Estoque em lote</span>
+              </button>
               <div class="data-actions">
                 <a class="btn btn-ghost data-btn" href="api/export.php?type=produtos" target="_blank" rel="noopener" title="Exportar CSV"><i class="fa-solid fa-file-arrow-down"></i></a>
                 <button class="btn btn-ghost data-btn" data-import-type="produtos" data-import-label="Produtos" title="Importar"><i class="fa-solid fa-file-arrow-up"></i></button>
+              </div>
+              <div class="view-toggle" id="product-view-toggle">
+                <button class="icon-btn active" data-view="table" title="Lista"><i class="fa-solid fa-list"></i></button>
+                <button class="icon-btn" data-view="grid" title="Grade"><i class="fa-solid fa-grip"></i></button>
+                <button class="icon-btn" data-view="thumb" title="Thumb"><i class="fa-solid fa-image"></i></button>
               </div>
               <div class="search-input">
                 <i class="fa-solid fa-magnifying-glass"></i>
@@ -399,21 +407,22 @@
               </div>
             </div>
           </div>
-          <div class="table-wrapper">
+          <div class="table-wrapper" id="product-list-container">
             <table class="table" id="product-table">
               <thead>
                 <tr>
                   <th>SKU</th>
                   <th>Produto</th>
                   <th>Categoria</th>
-                  <th>Preco</th>
+                  <th>Preço</th>
                   <th>Estoque</th>
                   <th>Status</th>
-                  <th>Acoes</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
+            <div class="product-grid" id="product-grid" style="display:none"></div>
           </div>
         </div>
 

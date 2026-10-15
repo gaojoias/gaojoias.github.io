@@ -73,6 +73,9 @@ const dom = {
   productFormReset: document.getElementById('product-form-reset'),
   productTable: document.getElementById('product-table')?.querySelector('tbody'),
   productSearch: document.getElementById('product-search'),
+  productGrid: document.getElementById('product-grid'),
+  productViewToggle: document.getElementById('product-view-toggle'),
+  bulkStockBtn: document.getElementById('bulk-stock-btn'),
   productCategories: document.getElementById('product-categories'),
   supplierDatalist: document.getElementById('supplier-datalist'),
   fornecedorForm: document.getElementById('fornecedor-form'),
@@ -1869,10 +1872,11 @@ function renderProductOptions() {
   }
 }
 
-function renderProducts() {
-  if (!dom.productTable) return;
+let productViewMode = 'table';
+
+function getFilteredProducts() {
   const search = dom.productSearch?.value?.toLowerCase() || '';
-  const rows = (state.data.produtos || []).filter((product) => {
+  return (state.data.produtos || []).filter((product) => {
     if (!search) return true;
     return (
       String(product.sku || '').toLowerCase().includes(search) ||
@@ -1881,28 +1885,158 @@ function renderProducts() {
       String(product.status || '').toLowerCase().includes(search)
     );
   });
+}
 
-  dom.productTable.innerHTML = rows.map((product) => {
+function productThumb(product) {
+  const urls = product.imageUrls || (product.imageUrl ? [product.imageUrl] : []);
+  return urls[0] || '';
+}
+
+function renderProducts() {
+  const rows = getFilteredProducts();
+  const tableEl = dom.productTable?.closest('table');
+
+  if (productViewMode === 'table') {
+    if (tableEl) tableEl.style.display = '';
+    if (dom.productGrid) dom.productGrid.style.display = 'none';
+    if (dom.productTable) {
+      dom.productTable.innerHTML = rows.map((product) => {
+        const stockClass = product.trackStock && product.availableQty <= product.lowStockThreshold ? 'danger' : 'success';
+        const thumb = productThumb(product);
+        return `
+          <tr>
+            <td data-label="SKU">${escapeHtml(product.sku || '-')}</td>
+            <td data-label="Produto">
+              <div style="display:flex;align-items:center;gap:8px">
+                ${thumb ? `<img src="${escapeHtml(thumb)}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0" />` : ''}
+                <span>${escapeHtml(product.name || '-')}</span>
+              </div>
+            </td>
+            <td data-label="Categoria">${escapeHtml(product.categoryName || '-')}</td>
+            <td data-label="Preço">${formatCurrency(product.price || 0)}</td>
+            <td data-label="Estoque">
+              <span class="badge ${stockClass}">${product.trackStock ? `${product.availableQty} disp. / ${product.stockQty} total` : 'Sem controle'}</span>
+            </td>
+            <td data-label="Status"><span class="badge ${productStatusBadge(product.status)}">${productStatusLabel(product.status)}</span></td>
+            <td data-label="Ações">
+              <div class="actions">
+                <button class="btn btn-ghost action-btn" data-action="edit-product" data-id="${product.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-ghost action-btn danger" data-action="delete-product" data-id="${product.id}" data-name="${escapeHtml(product.name || '')}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+    return;
+  }
+
+  if (tableEl) tableEl.style.display = 'none';
+  if (!dom.productGrid) return;
+  dom.productGrid.style.display = '';
+  dom.productGrid.className = 'product-grid' + (productViewMode === 'thumb' ? ' thumb-view' : '');
+
+  dom.productGrid.innerHTML = rows.map((product) => {
     const stockClass = product.trackStock && product.availableQty <= product.lowStockThreshold ? 'danger' : 'success';
+    const thumb = productThumb(product);
     return `
-      <tr>
-        <td data-label="SKU">${escapeHtml(product.sku || '-')}</td>
-        <td data-label="Produto">${escapeHtml(product.name || '-')}</td>
-        <td data-label="Categoria">${escapeHtml(product.categoryName || '-')}</td>
-        <td data-label="Preco">${formatCurrency(product.price || 0)}</td>
-        <td data-label="Estoque">
-          <span class="badge ${stockClass}">${product.trackStock ? `${product.availableQty} disp. / ${product.stockQty} total` : 'Sem controle'}</span>
-        </td>
-        <td data-label="Status"><span class="badge ${productStatusBadge(product.status)}">${productStatusLabel(product.status)}</span></td>
-        <td data-label="Acoes">
-          <div class="actions">
-            <button class="btn btn-ghost action-btn" data-action="edit-product" data-id="${product.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-ghost action-btn danger" data-action="delete-product" data-id="${product.id}" data-name="${escapeHtml(product.name || '')}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+      <div class="product-card">
+        <div class="product-card-thumb">
+          ${thumb ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(product.name || '')}" />` : '<i class="fa-solid fa-gem no-img"></i>'}
+        </div>
+        <div class="product-card-body">
+          <div class="product-card-name" title="${escapeHtml(product.name || '')}">${escapeHtml(product.name || '-')}</div>
+          <div class="product-card-sku">${escapeHtml(product.sku || '-')} · ${escapeHtml(product.categoryName || '-')}</div>
+          <div class="product-card-meta">
+            <span class="product-card-price">${formatCurrency(product.price || 0)}</span>
+            <span class="badge ${stockClass} product-card-stock">${product.trackStock ? `${product.availableQty}/${product.stockQty}` : '∞'}</span>
           </div>
-        </td>
-      </tr>
+        </div>
+        <div class="product-card-actions">
+          <button class="icon-btn" data-action="edit-product" data-id="${product.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+          <button class="icon-btn danger" data-action="delete-product" data-id="${product.id}" data-name="${escapeHtml(product.name || '')}" title="Excluir"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
     `;
   }).join('');
+}
+
+function openBulkStockDrawer() {
+  const products = (state.data.produtos || []).filter((p) => p.trackStock);
+  if (!products.length) { showToast('Nenhum produto com controle de estoque.', 'error'); return; }
+
+  openDrawer(`
+    <h3>Atualização de estoque em lote</h3>
+    <form id="bulk-stock-form">
+      <div class="bulk-stock-header">
+        <label><input type="checkbox" id="bulk-select-all" class="bulk-stock-check" checked /> Selecionar todos</label>
+        <label>Motivo: <input type="text" name="reason" value="Atualização em lote" class="input" style="width:200px;margin-left:4px" /></label>
+      </div>
+      <div class="bulk-stock-list">
+        ${products.map((p) => `
+          <div class="bulk-stock-row selected" data-product-id="${p.id}">
+            <input type="checkbox" class="bulk-stock-check bulk-row-check" checked />
+            <div class="bulk-stock-name">
+              ${escapeHtml(p.name || '-')}
+              <small>SKU: ${escapeHtml(p.sku || '-')}</small>
+            </div>
+            <div class="bulk-stock-current">${p.stockQty} atual</div>
+            <input type="number" class="bulk-stock-input" value="${p.stockQty}" min="0" step="1" />
+          </div>
+        `).join('')}
+      </div>
+      <div class="bulk-stock-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeDrawer()">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Salvar estoque</button>
+      </div>
+    </form>
+  `);
+
+  const form = qs('#bulk-stock-form');
+  const selectAll = qs('#bulk-select-all');
+
+  selectAll.addEventListener('change', () => {
+    const checks = qsa('.bulk-row-check', form);
+    checks.forEach((c) => {
+      c.checked = selectAll.checked;
+      c.closest('.bulk-stock-row').classList.toggle('selected', selectAll.checked);
+    });
+  });
+
+  form.addEventListener('change', (e) => {
+    if (e.target.classList.contains('bulk-row-check')) {
+      e.target.closest('.bulk-stock-row').classList.toggle('selected', e.target.checked);
+      const allChecks = qsa('.bulk-row-check', form);
+      selectAll.checked = allChecks.every((c) => c.checked);
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rows = qsa('.bulk-stock-row', form);
+    const items = [];
+    rows.forEach((row) => {
+      const check = row.querySelector('.bulk-row-check');
+      if (!check.checked) return;
+      items.push({
+        productId: Number(row.dataset.productId),
+        quantity: Number(row.querySelector('.bulk-stock-input').value) || 0
+      });
+    });
+    if (!items.length) { showToast('Selecione pelo menos um produto.', 'error'); return; }
+    const reason = form.querySelector('[name="reason"]').value || 'Atualização em lote';
+
+    try {
+      const btn = form.querySelector('[type="submit"]');
+      btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...';
+      await apiRequest('bulkAdjustInventory', { items, reason, mode: 'set' });
+      closeDrawer();
+      await loadAllData();
+      showToast(`Estoque atualizado para ${items.length} produto(s).`);
+    } catch (err) {
+      showToast(err.message || 'Erro ao atualizar estoque em lote', 'error');
+    }
+  });
 }
 
 function renderInventoryMovements() {
@@ -4668,6 +4802,17 @@ function setupEvents() {
   dom.orcamentoTable.addEventListener('click', handleOrcamentoActions);
   dom.vendaTable.addEventListener('click', handleVendaActions);
   if (dom.productTable) dom.productTable.addEventListener('click', handleProductActions);
+  if (dom.productGrid) dom.productGrid.addEventListener('click', handleProductActions);
+  if (dom.productViewToggle) {
+    dom.productViewToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-view]');
+      if (!btn) return;
+      productViewMode = btn.dataset.view;
+      dom.productViewToggle.querySelectorAll('.icon-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      renderProducts();
+    });
+  }
+  if (dom.bulkStockBtn) dom.bulkStockBtn.addEventListener('click', openBulkStockDrawer);
   if (dom.orderTable) dom.orderTable.addEventListener('click', handleOrderActions);
   dom.financeiroTable.addEventListener('click', handleFinanceiroActions);
   dom.lembreteTable.addEventListener('click', handleLembretesActions);
