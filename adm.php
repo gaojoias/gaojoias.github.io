@@ -13,6 +13,14 @@ $webDir   = trim(substr($selfDir, strlen($docRoot)), '/');
 $base     = $protocol . '://' . $host . '/' . ($webDir !== '' ? $webDir . '/' : '');
 
 $html = file_get_contents(__DIR__ . '/index.html');
+
+// Version local assets by mtime so each deploy busts the browser cache (Hostinger sends max-age=7d)
+foreach (['css/styles.css', 'js/app.js', 'js/marketing.js'] as $asset) {
+    $mtime = @filemtime(__DIR__ . '/' . $asset);
+    if ($mtime) {
+        $html = str_replace('"' . $asset . '"', '"' . $asset . '?v=' . $mtime . '"', $html);
+    }
+}
 // Inject base href right after <meta charset>
 $html = str_replace(
     '<meta charset="utf-8" />',
