@@ -27,6 +27,10 @@ RewriteRule \.(?:env|ini|log|bak|old|orig|sql|sqlite|db)$ - [F,L,NC]
 # Admin panel at /adm — adm.php injects correct <base href> for any environment
 RewriteRule ^adm/?$ adm.php [L]
 
+# Uploads live outside public_html (survive git deploys); files in the repo are served directly
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^img/uploads/([A-Za-z0-9_-]+\.[A-Za-z0-9]+)$ api/media.php?f=$1 [L]
+
 # Root → redirect to store (production only, not localhost)
 RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$ [NC]
 RewriteRule ^$ loja/ [R=302,L]

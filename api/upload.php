@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
+require __DIR__ . '/../app/uploads.php';
 
 current_admin() ?: json_response(['ok' => false, 'error' => 'Nao autenticado.'], 401);
 
@@ -40,14 +41,14 @@ if ($file['size'] > $maxBytes) {
     json_response(['ok' => false, 'error' => 'Arquivo muito grande. Maximo 8 MB.'], 422);
 }
 
-$uploadDir = __DIR__ . '/../img/uploads/';
-if (!is_dir($uploadDir)) {
-    mkdir($uploadDir, 0755, true);
+$uploadDir = upload_storage_dir();
+if (!is_dir($uploadDir) && !@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+    json_response(['ok' => false, 'error' => 'Pasta de uploads indisponivel no servidor.'], 500);
 }
 
 $ext      = $allowedMime[$mimeType];
 $name     = bin2hex(random_bytes(12)) . '.' . $ext;
-$destPath = $uploadDir . $name;
+$destPath = $uploadDir . '/' . $name;
 
 if (!move_uploaded_file($file['tmp_name'], $destPath)) {
     json_response(['ok' => false, 'error' => 'Falha ao salvar arquivo.'], 500);
