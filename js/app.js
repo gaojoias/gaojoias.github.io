@@ -1887,12 +1887,17 @@ function getFilteredProducts() {
   });
 }
 
+function productImageList(product) {
+  if (Array.isArray(product.imageUrls) && product.imageUrls.length) return product.imageUrls;
+  return product.imageUrl ? [product.imageUrl] : [];
+}
+
 function productThumb(product) {
-  const urls = product.imageUrls || (product.imageUrl ? [product.imageUrl] : []);
-  return urls[0] || '';
+  return productImageList(product)[0] || '';
 }
 
 function renderProducts() {
+  hideProductQuickView();
   const rows = getFilteredProducts();
   const tableEl = dom.productTable?.closest('table');
 
@@ -1906,9 +1911,9 @@ function renderProducts() {
         return `
           <tr>
             <td data-label="SKU">${escapeHtml(product.sku || '-')}</td>
-            <td data-label="Produto">
-              <div style="display:flex;align-items:center;gap:8px">
-                ${thumb ? `<img src="${escapeHtml(thumb)}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0" />` : ''}
+            <td data-label="Produto" class="qv-anchor" data-product-id="${product.id}" tabindex="0" aria-haspopup="dialog">
+              <div class="product-row-name">
+                ${thumb ? `<img class="product-row-thumb" src="${escapeHtml(thumb)}" alt="" />` : ''}
                 <span>${escapeHtml(product.name || '-')}</span>
               </div>
             </td>
@@ -1940,7 +1945,7 @@ function renderProducts() {
     const stockClass = product.trackStock && product.availableQty <= product.lowStockThreshold ? 'danger' : 'success';
     const thumb = productThumb(product);
     return `
-      <div class="product-card">
+      <div class="product-card qv-anchor" data-product-id="${product.id}" tabindex="0" aria-haspopup="dialog">
         <div class="product-card-thumb">
           ${thumb ? `<img src="${escapeHtml(thumb)}" alt="${escapeHtml(product.name || '')}" />` : '<i class="fa-solid fa-gem no-img"></i>'}
         </div>
@@ -2037,6 +2042,404 @@ function openBulkStockDrawer() {
       showToast(err.message || 'Erro ao atualizar estoque em lote', 'error');
     }
   });
+}
+
+// Product quick view: hover shows a passive preview, click pins an interactive one.
+const QV_OPEN_DELAY = 300;
+const QV_SWITCH_DELAY = 70;
+const QV_CLOSE_DELAY = 120;
+const QV_MAX_WIDTH = 640;
+const QV_MIN_SIDE_WIDTH = 520;
+const qvHoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+const productQuickView = { el: null, backdrop: null, anchor: null, productId: null, pinned: false, openTimer: 0, closeTimer: 0, frame: 0 };
+
+const INVENTORY_MOVEMENT_LABELS = {
+  initial: 'Estoque inicial',
+  purchase: 'Compra',
+  adjustment: 'Ajuste',
+  return: 'Devolução',
+  reservation: 'Reserva',
+  release: 'Liberação',
+  sale: 'Venda'
+};
+
+// MySQL datetimes ("2026-08-04 04:25:25") are not parsed by every Safari version without the "T"
+function qvDate(value) {
+  if (!value) return '';
+  const date = new Date(String(value).replace(' ', 'T'));
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('pt-BR');
+}
+
+function qvNumber(value, digits = 1) {
+  return Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: digits });
+}
+
+function canHoverPreview() {
+  return qvHoverQuery.matches && window.innerWidth >= 760;
+}
+
+function getQuickViewAnchor(target) {
+  return target instanceof Element ? target.closest('.qv-anchor') : null;
+}
+
+function markImageMissing(img) {
+  if (!(img instanceof HTMLImageElement) || !img.isConnected) return;
+  const placeholder = document.createElement('span');
+  placeholder.className = 'img-missing';
+  placeholder.title = 'Foto não encontrada no servidor — reenvie pelo editor da peça';
+  placeholder.innerHTML = '<i class="fa-solid fa-image"></i><span>Foto ausente</span>';
+  img.replaceWith(placeholder);
+}
+
+function buildProductQuickViewHtml(product) {
+  const isAdmin = state.perfil === 'Administrador';
+  const images = productImageList(product);
+  const price = Number(product.price || 0);
+  const compareAt = Number(product.compareAt || 0);
+  const cost = product.cost === '' || product.cost === null || product.cost === undefined ? null : Number(product.cost);
+
+  const photo = images.length
+    ? `<img src="${escapeHtml(images[0])}" alt="${escapeHtml(product.name || '')}" />`
+    : '<span class="img-missing"><i class="fa-solid fa-gem"></i><span>Sem foto cadastrada</span></span>';
+  const thumbs = images.length > 1
+    ? `<div class="qv-thumbs">${images.map((url, index) => `
+        <button type="button" class="qv-thumb${index === 0 ? ' active' : ''}" data-src="${escapeHtml(url)}" aria-label="Foto ${index + 1}">
+          <img src="${escapeHtml(url)}" alt="" loading="lazy" />
+        </button>`).join('')}</div>`
+    : '';
+
+  let stock;
+  if (!product.trackStock) {
+    stock = '<div class="qv-stock"><i class="fa-solid fa-infinity"></i><span>Sem controle de estoque</span></div>';
+  } else {
+    const available = Number(product.availableQty || 0);
+    const total = Number(product.stockQty || 0);
+    const reserved = Number(product.reservedQty || 0);
+    const level = available <= 0 ? 'out' : available <= Number(product.lowStockThreshold || 0) ? 'low' : 'ok';
+    const flag = { out: product.allowBackorder ? 'Esgotado · aceita encomenda' : 'Esgotado', low: 'Estoque baixo', ok: '' }[level];
+    stock = `
+      <div class="qv-stock qv-stock--${level}">
+        <i class="fa-solid fa-boxes-stacked"></i>
+        <span><strong>${available}</strong> ${available === 1 ? 'disponível' : 'disponíveis'} · ${total} em estoque${reserved ? ` · ${reserved} ${reserved === 1 ? 'reservado' : 'reservados'}` : ''}</span>
+        ${flag ? `<em>${flag}</em>` : ''}
+      </div>`;
+  }
+
+  const facts = [];
+  if (isAdmin && cost !== null) {
+    facts.push(['Custo', formatCurrency(cost)]);
+    if (price > 0) facts.push(['Margem', `${qvNumber(((price - cost) / price) * 100)}% · ${formatCurrency(price - cost)}`]);
+  }
+  if (product.supplierName) facts.push(['Fornecedor', escapeHtml(product.supplierName)]);
+  if (product.shipping !== '' && product.shipping !== null && product.shipping !== undefined) facts.push(['Frete', formatCurrency(product.shipping)]);
+  if (product.weightGrams) facts.push(['Peso', `${qvNumber(product.weightGrams, 2)} g`]);
+  if (product.dimensions) facts.push(['Dimensões', escapeHtml(product.dimensions)]);
+  if (product.trackStock) {
+    facts.push(['Alerta de estoque', `${qvNumber(product.lowStockThreshold, 0)} un.`]);
+    facts.push(['Venda sem estoque', product.allowBackorder ? 'Permitida' : 'Bloqueada']);
+  }
+
+  const shortDesc = String(product.shortDescription || '').trim();
+  const longDesc = String(product.description || '').trim();
+  const descriptions = [shortDesc !== product.name ? shortDesc : '', longDesc !== shortDesc ? longDesc : ''].filter(Boolean);
+
+  const moves = (state.data.inventoryMovements || [])
+    .filter((move) => Number(move.productId) === Number(product.id))
+    .slice(0, 3);
+
+  const created = qvDate(product.createdAt);
+  const updated = qvDate(product.updatedAt);
+  const storeLink = product.status === 'active' && product.slug
+    ? `<a class="btn btn-ghost" href="loja/produto.php?slug=${encodeURIComponent(product.slug)}" target="_blank" rel="noopener"><i class="fa-solid fa-store"></i><span>Ver na loja</span></a>`
+    : '';
+  const stockAction = isAdmin && product.trackStock
+    ? `<button type="button" class="btn btn-ghost" data-qv-action="stock" data-id="${product.id}"><i class="fa-solid fa-boxes-stacked"></i><span>Ajustar estoque</span></button>`
+    : '';
+
+  return `
+    <div class="qv-media">
+      <div class="qv-photo">${photo}</div>
+      ${thumbs}
+    </div>
+    <div class="qv-info">
+      <div class="qv-head">
+        <div class="qv-title">
+          <span class="qv-eyebrow">${escapeHtml([product.sku, product.categoryName].filter(Boolean).join(' · ') || 'Sem SKU')}</span>
+          <h4 id="product-qv-title">${escapeHtml(product.name || '-')}</h4>
+        </div>
+        <div class="qv-head-side">
+          <span class="badge ${productStatusBadge(product.status)}">${escapeHtml(productStatusLabel(product.status))}</span>
+          <button type="button" class="icon-btn icon-btn--sm qv-close" title="Fechar (Esc)" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      <div class="qv-price">
+        <strong>${formatCurrency(price)}</strong>
+        ${compareAt > price ? `<s>${formatCurrency(compareAt)}</s>` : ''}
+      </div>
+      ${stock}
+      ${facts.length ? `<dl class="qv-facts">${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>` : ''}
+      ${descriptions.length ? `<div class="qv-section"><h5>Descrição</h5>${descriptions.map((text) => `<p>${escapeHtml(text)}</p>`).join('')}</div>` : ''}
+      ${product.notes ? `<div class="qv-section qv-notes"><h5>Observações internas</h5><p>${escapeHtml(product.notes)}</p></div>` : ''}
+      ${moves.length ? `<div class="qv-section"><h5>Últimas movimentações</h5><ul class="qv-moves">${moves.map((move) => {
+        const qty = Number(move.quantity || 0);
+        return `<li title="${escapeHtml(move.reason || '')}"><b class="${qty < 0 ? 'neg' : 'pos'}">${qty > 0 ? '+' : ''}${qty}</b><span>${escapeHtml(INVENTORY_MOVEMENT_LABELS[move.movementType] || move.movementType || '-')}</span><time>${qvDate(move.createdAt)}</time></li>`;
+      }).join('')}</ul></div>` : ''}
+      <div class="qv-foot">
+        ${created ? `<span class="qv-dates">Cadastrado em ${created}${updated && updated !== created ? ` · atualizado em ${updated}` : ''}</span>` : ''}
+        <div class="qv-actions">
+          ${storeLink}
+          ${stockAction}
+          <button type="button" class="btn btn-primary" data-action="edit-product" data-id="${product.id}"><i class="fa-solid fa-pen"></i><span>Editar</span></button>
+        </div>
+        <span class="qv-hint"><i class="fa-solid fa-thumbtack"></i> Clique para fixar</span>
+      </div>
+    </div>
+  `;
+}
+
+function getProductQuickView() {
+  if (productQuickView.el) return productQuickView.el;
+  const el = document.createElement('div');
+  el.className = 'product-qv';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-labelledby', 'product-qv-title');
+  el.setAttribute('aria-hidden', 'true');
+  el.tabIndex = -1;
+  el.addEventListener('click', handleQuickViewClick);
+  el.addEventListener('mouseover', (event) => {
+    const thumb = event.target.closest('.qv-thumb');
+    if (thumb) setQuickViewPhoto(thumb);
+  });
+  el.addEventListener('mousemove', handleQuickViewZoom);
+  el.addEventListener('error', (event) => markImageMissing(event.target), true);
+  const backdrop = document.createElement('div');
+  backdrop.className = 'product-qv-backdrop';
+  document.body.append(backdrop, el);
+  productQuickView.el = el;
+  productQuickView.backdrop = backdrop;
+  return el;
+}
+
+function positionProductQuickView() {
+  const { el, anchor } = productQuickView;
+  if (!el || !anchor || el.classList.contains('sheet')) return;
+  if (!anchor.isConnected) {
+    hideProductQuickView();
+    return;
+  }
+  const margin = 12;
+  const gap = 14;
+  const rect = anchor.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight;
+  const spaceRight = viewportWidth - rect.right - gap - margin;
+  const spaceLeft = rect.left - gap - margin;
+
+  let side = '';
+  let width = Math.min(QV_MAX_WIDTH, viewportWidth - margin * 2);
+  let left;
+  if (Math.max(spaceRight, spaceLeft) >= QV_MIN_SIDE_WIDTH) {
+    side = spaceRight >= QV_MAX_WIDTH || spaceRight >= spaceLeft ? 'right' : 'left';
+    width = Math.min(QV_MAX_WIDTH, side === 'right' ? spaceRight : spaceLeft);
+    left = side === 'right' ? rect.right + gap : rect.left - gap - width;
+  }
+  el.style.width = `${width}px`;
+  const height = el.offsetHeight;
+
+  let top;
+  if (side) {
+    top = Math.min(Math.max(margin, rect.top + rect.height / 2 - height / 2), viewportHeight - height - margin);
+  } else {
+    left = Math.min(Math.max(margin, rect.left + rect.width / 2 - width / 2), viewportWidth - width - margin);
+    if (rect.bottom + gap + height <= viewportHeight - margin) {
+      side = 'below';
+      top = rect.bottom + gap;
+    } else if (rect.top - gap - height >= margin) {
+      side = 'above';
+      top = rect.top - gap - height;
+    } else {
+      side = 'over';
+      top = Math.max(margin, (viewportHeight - height) / 2);
+    }
+  }
+  el.style.left = `${Math.round(left)}px`;
+  el.style.top = `${Math.round(Math.max(margin, top))}px`;
+  el.dataset.side = side;
+}
+
+function showProductQuickView(anchor, pinned) {
+  const product = (state.data.produtos || []).find((item) => Number(item.id) === Number(anchor.dataset.productId));
+  if (!product) return;
+  const el = getProductQuickView();
+  clearTimeout(productQuickView.openTimer);
+  clearTimeout(productQuickView.closeTimer);
+
+  if (productQuickView.anchor !== anchor) {
+    productQuickView.anchor?.classList.remove('qv-active');
+    anchor.classList.add('qv-active');
+    productQuickView.anchor = anchor;
+  }
+  if (productQuickView.productId !== product.id || !el.classList.contains('open')) {
+    el.innerHTML = buildProductQuickViewHtml(product);
+    el.scrollTop = 0;
+    productQuickView.productId = product.id;
+  }
+
+  productQuickView.pinned = pinned;
+  const sheet = pinned && !canHoverPreview();
+  el.classList.toggle('pinned', pinned);
+  el.classList.toggle('sheet', sheet);
+  el.setAttribute('aria-modal', String(sheet));
+  el.setAttribute('aria-hidden', 'false');
+  productQuickView.backdrop.classList.toggle('open', sheet);
+  if (sheet) {
+    el.style.left = '';
+    el.style.top = '';
+    el.style.width = '';
+    el.dataset.side = 'sheet';
+  } else {
+    positionProductQuickView();
+  }
+  el.classList.add('open');
+}
+
+function hideProductQuickView() {
+  clearTimeout(productQuickView.openTimer);
+  clearTimeout(productQuickView.closeTimer);
+  const { el, backdrop, anchor } = productQuickView;
+  anchor?.classList.remove('qv-active');
+  productQuickView.anchor = null;
+  productQuickView.productId = null;
+  productQuickView.pinned = false;
+  if (!el) return;
+  el.classList.remove('open', 'pinned');
+  el.setAttribute('aria-hidden', 'true');
+  backdrop.classList.remove('open');
+}
+
+function scheduleProductQuickView(anchor) {
+  clearTimeout(productQuickView.closeTimer);
+  clearTimeout(productQuickView.openTimer);
+  const isOpen = Boolean(productQuickView.el?.classList.contains('open'));
+  if (isOpen && productQuickView.anchor === anchor) return;
+  productQuickView.openTimer = setTimeout(() => {
+    if (anchor.isConnected) showProductQuickView(anchor, false);
+  }, isOpen ? QV_SWITCH_DELAY : QV_OPEN_DELAY);
+}
+
+function scheduleProductQuickViewClose() {
+  clearTimeout(productQuickView.openTimer);
+  clearTimeout(productQuickView.closeTimer);
+  productQuickView.closeTimer = setTimeout(hideProductQuickView, QV_CLOSE_DELAY);
+}
+
+function toggleProductQuickViewPin(anchor) {
+  if (productQuickView.pinned && productQuickView.anchor === anchor) {
+    hideProductQuickView();
+    return;
+  }
+  showProductQuickView(anchor, true);
+}
+
+function handleQuickViewMouseOver(event) {
+  if (productQuickView.pinned || !canHoverPreview()) return;
+  const anchor = getQuickViewAnchor(event.target);
+  if (anchor && !anchor.contains(event.relatedTarget)) scheduleProductQuickView(anchor);
+}
+
+function handleQuickViewMouseOut(event) {
+  if (productQuickView.pinned) return;
+  const anchor = getQuickViewAnchor(event.target);
+  if (anchor && !anchor.contains(event.relatedTarget)) scheduleProductQuickViewClose();
+}
+
+function handleQuickViewAnchorKey(event) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const anchor = getQuickViewAnchor(event.target);
+  if (!anchor || event.target !== anchor) return;
+  event.preventDefault();
+  toggleProductQuickViewPin(anchor);
+  if (productQuickView.pinned) productQuickView.el.focus({ preventScroll: true });
+}
+
+function handleQuickViewOutsidePointer(event) {
+  const { el, anchor, pinned } = productQuickView;
+  if (!pinned || !el || el.contains(event.target) || anchor?.contains(event.target)) return;
+  hideProductQuickView();
+}
+
+function handleQuickViewKeydown(event) {
+  if (event.key !== 'Escape' || !productQuickView.el?.classList.contains('open')) return;
+  const { anchor, pinned } = productQuickView;
+  hideProductQuickView();
+  if (pinned && anchor?.isConnected) anchor.focus({ preventScroll: true });
+}
+
+function handleQuickViewScroll(event) {
+  const { el, pinned } = productQuickView;
+  if (!el?.classList.contains('open') || el.contains(event.target)) return;
+  if (!pinned) {
+    hideProductQuickView();
+    return;
+  }
+  if (productQuickView.frame) return;
+  productQuickView.frame = requestAnimationFrame(() => {
+    productQuickView.frame = 0;
+    positionProductQuickView();
+  });
+}
+
+function handleQuickViewResize() {
+  const { el, anchor, pinned } = productQuickView;
+  if (!el?.classList.contains('open')) return;
+  if (pinned && anchor?.isConnected) showProductQuickView(anchor, true);
+  else hideProductQuickView();
+}
+
+function handleQuickViewZoom(event) {
+  const photo = event.target.closest('.qv-photo');
+  const img = photo?.querySelector('img');
+  if (!img) return;
+  const rect = photo.getBoundingClientRect();
+  img.style.transformOrigin = `${((event.clientX - rect.left) / rect.width) * 100}% ${((event.clientY - rect.top) / rect.height) * 100}%`;
+}
+
+function setQuickViewPhoto(thumb) {
+  if (thumb.classList.contains('active')) return;
+  const el = productQuickView.el;
+  const photo = el.querySelector('.qv-photo');
+  if (!photo) return;
+  el.querySelectorAll('.qv-thumb.active').forEach((node) => node.classList.remove('active'));
+  thumb.classList.add('active');
+  const img = document.createElement('img');
+  img.src = thumb.dataset.src;
+  img.alt = el.querySelector('#product-qv-title')?.textContent || '';
+  photo.replaceChildren(img);
+}
+
+function openQuickViewStockAdjust(productId) {
+  hideProductQuickView();
+  if (!window.smartModal || !dom.inventoryProduct) return;
+  window.smartModal.open('inventory-form');
+  dom.inventoryProduct.value = String(productId);
+}
+
+function handleQuickViewClick(event) {
+  const thumb = event.target.closest('.qv-thumb');
+  if (thumb) {
+    setQuickViewPhoto(thumb);
+    return;
+  }
+  if (event.target.closest('.qv-close')) {
+    hideProductQuickView();
+    return;
+  }
+  const stockBtn = event.target.closest('[data-qv-action="stock"]');
+  if (stockBtn) {
+    openQuickViewStockAdjust(stockBtn.dataset.id);
+    return;
+  }
+  if (event.target.closest('[data-action="edit-product"]')) handleProductActions(event);
 }
 
 function renderInventoryMovements() {
@@ -4373,7 +4776,12 @@ async function handleProductSubmit(event) {
 
 function handleProductActions(event) {
   const btn = event.target.closest('button');
-  if (!btn) return;
+  if (!btn) {
+    const anchor = getQuickViewAnchor(event.target);
+    if (anchor) toggleProductQuickViewPin(anchor);
+    return;
+  }
+  hideProductQuickView();
 
   if (btn.dataset.action === 'edit-product') {
     const product = (state.data.produtos || []).find((item) => Number(item.id) === Number(btn.dataset.id));
@@ -4803,6 +5211,17 @@ function setupEvents() {
   dom.vendaTable.addEventListener('click', handleVendaActions);
   if (dom.productTable) dom.productTable.addEventListener('click', handleProductActions);
   if (dom.productGrid) dom.productGrid.addEventListener('click', handleProductActions);
+  [dom.productGrid, dom.productTable].forEach((container) => {
+    if (!container) return;
+    container.addEventListener('mouseover', handleQuickViewMouseOver);
+    container.addEventListener('mouseout', handleQuickViewMouseOut);
+    container.addEventListener('keydown', handleQuickViewAnchorKey);
+    container.addEventListener('error', (event) => markImageMissing(event.target), true);
+  });
+  document.addEventListener('pointerdown', handleQuickViewOutsidePointer, true);
+  document.addEventListener('keydown', handleQuickViewKeydown);
+  window.addEventListener('scroll', handleQuickViewScroll, { capture: true, passive: true });
+  window.addEventListener('resize', handleQuickViewResize);
   if (dom.productViewToggle) {
     dom.productViewToggle.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-view]');
