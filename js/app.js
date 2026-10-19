@@ -1880,6 +1880,7 @@ function getFilteredProducts() {
     if (!search) return true;
     return (
       String(product.sku || '').toLowerCase().includes(search) ||
+      String(product.supplierRef || '').toLowerCase().includes(search) ||
       String(product.name || '').toLowerCase().includes(search) ||
       String(product.categoryName || '').toLowerCase().includes(search) ||
       String(product.status || '').toLowerCase().includes(search)
@@ -1910,7 +1911,10 @@ function renderProducts() {
         const thumb = productThumb(product);
         return `
           <tr>
-            <td data-label="SKU">${escapeHtml(product.sku || '-')}</td>
+            <td data-label="SKU">
+              ${escapeHtml(product.sku || '-')}
+              ${product.supplierRef ? `<small class="product-sku-ref" title="Referência do fornecedor">Ref. ${escapeHtml(product.supplierRef)}</small>` : ''}
+            </td>
             <td data-label="Produto" class="qv-anchor" data-product-id="${product.id}" tabindex="0" aria-haspopup="dialog">
               <div class="product-row-name">
                 ${thumb ? `<img class="product-row-thumb" src="${escapeHtml(thumb)}" alt="" />` : ''}
@@ -1966,82 +1970,361 @@ function renderProducts() {
   }).join('');
 }
 
+function normalizeSearchText(value) {
+  return String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function bulkStockRowHtml(row) {
+  const product = row.product;
+  const thumb = productThumb(product);
+  const meta = [
+    product.sku ? `SKU ${product.sku}` : '',
+    product.supplierRef ? `Ref. ${product.supplierRef}` : '',
+    product.categoryName || ''
+  ].filter(Boolean).map(escapeHtml).join(' · ');
+  const reserved = Number(product.reservedQty || 0);
+  const statusText = { ok: 'em estoque', low: 'estoque baixo', out: 'esgotada' }[row.status];
+  const name = escapeHtml(product.name || '-');
+  return `
+    <div class="bs-row bs-row--${row.status}" data-id="${row.id}">
+      <label class="bs-check" title="Selecionar"><input type="checkbox" class="bs-row-check" aria-label="Selecionar ${name}" /></label>
+      <div class="bs-thumb">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" />` : '<i class="fa-solid fa-gem"></i>'}</div>
+      <div class="bs-name">
+        <strong title="${name}">${name}</strong>
+        ${meta ? `<span>${meta}</span>` : ''}
+      </div>
+      <div class="bs-current">
+        <span><b>${row.current}</b> atual</span>
+        <small><i class="bs-dot"></i>${statusText}${reserved ? ` · ${reserved} ${reserved === 1 ? 'reservada' : 'reservadas'}` : ''}</small>
+      </div>
+      <div class="bs-stepper">
+        <button type="button" class="bs-step" data-step="-1" aria-label="Diminuir"><i class="fa-solid fa-minus"></i></button>
+        <input type="number" class="bs-qty" min="0" step="1" inputmode="numeric" value="${row.current}" aria-label="Nova quantidade de ${name}" />
+        <button type="button" class="bs-step" data-step="1" aria-label="Aumentar"><i class="fa-solid fa-plus"></i></button>
+      </div>
+      <div class="bs-change">
+        <span class="bs-diff"></span>
+        <button type="button" class="bs-undo" title="Desfazer" aria-label="Desfazer alteração" hidden><i class="fa-solid fa-rotate-left"></i></button>
+      </div>
+    </div>`;
+}
+
+// Checkboxes pick the targets of "apply to selected"; saving sends every row whose quantity changed.
 function openBulkStockDrawer() {
-  const products = (state.data.produtos || []).filter((p) => p.trackStock);
-  if (!products.length) { showToast('Nenhum produto com controle de estoque.', 'error'); return; }
+  const allProducts = state.data.produtos || [];
+  const products = allProducts.filter((product) => product.trackStock);
+  if (!products.length) {
+    showToast('Nenhuma peça com controle de estoque.', 'error');
+    return;
+  }
+  const untracked = allProducts.length - products.length;
+  const rows = products.map((product) => {
+    const current = Number(product.stockQty || 0);
+    const available = Number(product.availableQty ?? current);
+    return {
+      id: Number(product.id),
+      current,
+      value: current,
+      selected: false,
+      status: available <= 0 ? 'out' : available <= Number(product.lowStockThreshold || 0) ? 'low' : 'ok',
+      search: normalizeSearchText([product.name, product.sku, product.supplierRef, product.categoryName].join(' ')),
+      product
+    };
+  });
+  const countStatus = (status) => rows.filter((row) => row.status === status).length;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   openDrawer(`
-    <h3>Atualização de estoque em lote</h3>
-    <form id="bulk-stock-form">
-      <div class="bulk-stock-header">
-        <label><input type="checkbox" id="bulk-select-all" class="bulk-stock-check" checked /> Selecionar todos</label>
-        <label>Motivo: <input type="text" name="reason" value="Atualização em lote" class="input" style="width:200px;margin-left:4px" /></label>
+    <div class="bs" id="bulk-stock">
+      <header class="bs-head">
+        <span class="bs-head-icon"><i class="fa-solid fa-boxes-stacked"></i></span>
+        <div>
+          <h3>Estoque em lote</h3>
+          <p>Selecione as peças e aplique a mesma quantidade a todas, ou ajuste cada uma na lista.</p>
+        </div>
+      </header>
+
+      <div class="bs-toolbar">
+        <label class="bs-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="search" class="bs-search-input" placeholder="Buscar por nome, SKU, referência ou categoria" autocomplete="off" aria-label="Buscar peças" />
+        </label>
+        <div class="bs-chips" role="group" aria-label="Filtrar peças">
+          <button type="button" class="bs-chip active" data-filter="all">Todas <b>${rows.length}</b></button>
+          <button type="button" class="bs-chip bs-chip--low" data-filter="low"><i class="bs-dot"></i>Estoque baixo <b>${countStatus('low')}</b></button>
+          <button type="button" class="bs-chip bs-chip--out" data-filter="out"><i class="bs-dot"></i>Esgotadas <b>${countStatus('out')}</b></button>
+          <button type="button" class="bs-chip" data-filter="changed"><i class="fa-solid fa-pen"></i>Alteradas <b data-count="changed">0</b></button>
+        </div>
       </div>
-      <div class="bulk-stock-list">
-        ${products.map((p) => `
-          <div class="bulk-stock-row selected" data-product-id="${p.id}">
-            <input type="checkbox" class="bulk-stock-check bulk-row-check" checked />
-            <div class="bulk-stock-name">
-              ${escapeHtml(p.name || '-')}
-              <small>SKU: ${escapeHtml(p.sku || '-')}</small>
-            </div>
-            <div class="bulk-stock-current">${p.stockQty} atual</div>
-            <input type="number" class="bulk-stock-input" value="${p.stockQty}" min="0" step="1" />
+
+      <div class="bs-bulkbar">
+        <label class="bs-check bs-check-all">
+          <input type="checkbox" class="bs-all" />
+          <span>Selecionar todas</span>
+        </label>
+        <span class="bs-selected" data-count="selected">Nenhuma selecionada</span>
+        <div class="bs-apply">
+          <div class="bs-mode" role="radiogroup" aria-label="Como aplicar a quantidade">
+            <button type="button" class="active" data-mode="set" role="radio" aria-checked="true">Definir</button>
+            <button type="button" data-mode="add" role="radio" aria-checked="false">Somar</button>
+            <button type="button" data-mode="sub" role="radio" aria-checked="false">Subtrair</button>
           </div>
-        `).join('')}
+          <input type="number" class="bs-apply-qty" min="0" step="1" inputmode="numeric" placeholder="Qtd." aria-label="Quantidade a aplicar nas selecionadas" />
+          <button type="button" class="btn btn-primary bs-apply-btn" disabled><i class="fa-solid fa-wand-magic-sparkles"></i><span>Aplicar</span></button>
+        </div>
       </div>
-      <div class="bulk-stock-footer">
-        <button type="button" class="btn btn-ghost" onclick="closeDrawer()">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Salvar estoque</button>
+
+      <div class="bs-list">
+        ${rows.map(bulkStockRowHtml).join('')}
+        <div class="bs-empty" hidden><i class="fa-solid fa-magnifying-glass"></i><span>Nenhuma peça encontrada com esse filtro.</span></div>
+        ${untracked ? `<p class="bs-note"><i class="fa-solid fa-circle-info"></i>${plural(untracked, 'peça sem controle de estoque não aparece', 'peças sem controle de estoque não aparecem')} aqui.</p>` : ''}
       </div>
-    </form>
-  `);
 
-  const form = qs('#bulk-stock-form');
-  const selectAll = qs('#bulk-select-all');
+      <footer class="bs-foot">
+        <div class="bs-summary" data-summary></div>
+        <label class="bs-reason">
+          <i class="fa-solid fa-comment-dots"></i>
+          <input type="text" class="bs-reason-input" list="bs-reasons" maxlength="180" value="Atualização de estoque em lote" placeholder="Motivo da alteração" aria-label="Motivo da alteração" />
+        </label>
+        <datalist id="bs-reasons">
+          <option value="Contagem de inventário"></option>
+          <option value="Entrada de mercadoria do fornecedor"></option>
+          <option value="Correção de estoque"></option>
+        </datalist>
+        <div class="bs-foot-actions">
+          <button type="button" class="btn btn-ghost bs-cancel">Cancelar</button>
+          <button type="button" class="btn btn-primary bs-save" disabled><i class="fa-solid fa-check"></i><span>Salvar</span></button>
+        </div>
+      </footer>
+    </div>
+  `, 'bulk-stock');
 
-  selectAll.addEventListener('change', () => {
-    const checks = qsa('.bulk-row-check', form);
-    checks.forEach((c) => {
-      c.checked = selectAll.checked;
-      c.closest('.bulk-stock-row').classList.toggle('selected', selectAll.checked);
+  const root = qs('#bulk-stock');
+  const list = qs('.bs-list', root);
+  const searchInput = qs('.bs-search-input', root);
+  const allBox = qs('.bs-all', root);
+  const applyQty = qs('.bs-apply-qty', root);
+  const applyBtn = qs('.bs-apply-btn', root);
+  const saveBtn = qs('.bs-save', root);
+  const reasonInput = qs('.bs-reason-input', root);
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+  const elById = new Map(qsa('.bs-row', list).map((el) => [Number(el.dataset.id), el]));
+  let filter = 'all';
+  let mode = 'set';
+
+  const rowOf = (node) => rowById.get(Number(node.closest('.bs-row')?.dataset.id));
+  const changedRows = () => rows.filter((row) => row.value !== row.current);
+  const visibleRows = () => rows.filter((row) => !elById.get(row.id).hidden);
+
+  function paintRow(row, keepInput = false) {
+    const el = elById.get(row.id);
+    const diff = row.value - row.current;
+    el.classList.toggle('is-selected', row.selected);
+    el.classList.toggle('is-changed', diff !== 0);
+    el.querySelector('.bs-row-check').checked = row.selected;
+    if (!keepInput) el.querySelector('.bs-qty').value = row.value;
+    const badge = el.querySelector('.bs-diff');
+    badge.textContent = diff ? `${diff > 0 ? '+' : '−'}${Math.abs(diff)}` : '';
+    badge.className = `bs-diff${diff > 0 ? ' up' : diff < 0 ? ' down' : ''}`;
+    el.querySelector('.bs-undo').hidden = diff === 0;
+  }
+
+  function setValue(row, value) {
+    row.value = Math.max(0, Math.floor(value) || 0);
+    paintRow(row);
+  }
+
+  function refreshSelection() {
+    const visible = visibleRows();
+    const selectedVisible = visible.filter((row) => row.selected).length;
+    allBox.checked = visible.length > 0 && selectedVisible === visible.length;
+    allBox.indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
+    const selected = rows.filter((row) => row.selected).length;
+    qs('[data-count="selected"]', root).textContent = selected ? plural(selected, 'selecionada', 'selecionadas') : 'Nenhuma selecionada';
+    root.classList.toggle('has-selection', selected > 0);
+    applyBtn.disabled = !selected || applyQty.value === '';
+    applyBtn.querySelector('span').textContent = selected ? `Aplicar a ${selected}` : 'Aplicar';
+  }
+
+  function refreshSummary() {
+    const changed = changedRows();
+    const delta = changed.reduce((sum, row) => sum + row.value - row.current, 0);
+    qs('[data-count="changed"]', root).textContent = changed.length;
+    qs('[data-summary]', root).innerHTML = changed.length
+      ? `<strong>${plural(changed.length, 'alteração', 'alterações')}</strong>
+         <span class="${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}">${delta > 0 ? '+' : delta < 0 ? '−' : ''}${Math.abs(delta)} un. no total</span>
+         <button type="button" class="bs-reset-all">Desfazer tudo</button>`
+      : '<span class="bs-summary-empty">Nenhuma alteração ainda</span>';
+    saveBtn.disabled = !changed.length;
+    saveBtn.querySelector('span').textContent = changed.length ? `Salvar ${plural(changed.length, 'alteração', 'alterações')}` : 'Salvar';
+  }
+
+  function applyFilters() {
+    const term = normalizeSearchText(searchInput.value.trim());
+    let shown = 0;
+    rows.forEach((row) => {
+      const inFilter = filter === 'all' || (filter === 'changed' ? row.value !== row.current : row.status === filter);
+      const visible = inFilter && (!term || row.search.includes(term));
+      elById.get(row.id).hidden = !visible;
+      if (visible) shown += 1;
     });
+    qs('.bs-empty', list).hidden = shown > 0;
+    refreshSelection();
+  }
+
+  function applyToSelected() {
+    if (applyQty.value === '') return;
+    const qty = Math.max(0, Math.floor(Number(applyQty.value)) || 0);
+    const targets = rows.filter((row) => row.selected);
+    if (!targets.length) return;
+    targets.forEach((row) => setValue(row, mode === 'set' ? qty : mode === 'add' ? row.value + qty : row.value - qty));
+    refreshSummary();
+    if (filter === 'changed') applyFilters();
+    const pieces = plural(targets.length, 'peça', 'peças');
+    const done = mode === 'set' ? `Quantidade ${qty} definida para ${pieces}` : `${mode === 'add' ? '+' : '−'}${qty} un. em ${pieces}`;
+    showToast(`${done}. Revise e salve.`);
+  }
+
+  list.addEventListener('error', (event) => markImageMissing(event.target), true);
+
+  list.addEventListener('click', (event) => {
+    const step = event.target.closest('.bs-step');
+    if (step) {
+      const row = rowOf(step);
+      setValue(row, row.value + Number(step.dataset.step));
+      refreshSummary();
+      return;
+    }
+    const undo = event.target.closest('.bs-undo');
+    if (undo) {
+      setValue(rowOf(undo), rowOf(undo).current);
+      refreshSummary();
+      if (filter === 'changed') applyFilters();
+      return;
+    }
+    if (event.target.closest('input, button, label')) return;
+    const row = rowOf(event.target);
+    if (!row) return;
+    row.selected = !row.selected;
+    paintRow(row);
+    refreshSelection();
   });
 
-  form.addEventListener('change', (e) => {
-    if (e.target.classList.contains('bulk-row-check')) {
-      e.target.closest('.bulk-stock-row').classList.toggle('selected', e.target.checked);
-      const allChecks = qsa('.bulk-row-check', form);
-      selectAll.checked = allChecks.every((c) => c.checked);
+  list.addEventListener('change', (event) => {
+    if (event.target.classList.contains('bs-row-check')) {
+      const row = rowOf(event.target);
+      row.selected = event.target.checked;
+      paintRow(row);
+      refreshSelection();
+    } else if (event.target.classList.contains('bs-qty')) {
+      // Normalizes what was typed: blank restores the last valid value, decimals/negatives are clamped
+      paintRow(rowOf(event.target));
+      if (filter === 'changed') applyFilters();
     }
   });
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const rows = qsa('.bulk-stock-row', form);
-    const items = [];
-    rows.forEach((row) => {
-      const check = row.querySelector('.bulk-row-check');
-      if (!check.checked) return;
-      items.push({
-        productId: Number(row.dataset.productId),
-        quantity: Number(row.querySelector('.bulk-stock-input').value) || 0
-      });
-    });
-    if (!items.length) { showToast('Selecione pelo menos um produto.', 'error'); return; }
-    const reason = form.querySelector('[name="reason"]').value || 'Atualização em lote';
+  list.addEventListener('input', (event) => {
+    if (!event.target.classList.contains('bs-qty') || event.target.value === '') return;
+    const row = rowOf(event.target);
+    row.value = Math.max(0, Math.floor(Number(event.target.value)) || 0);
+    paintRow(row, true);
+    refreshSummary();
+  });
 
+  // Enter / Shift+Enter walk the list like a spreadsheet, for fast inventory counts
+  list.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || !event.target.classList.contains('bs-qty')) return;
+    event.preventDefault();
+    const inputs = qsa('.bs-row:not([hidden]) .bs-qty', list);
+    const next = inputs[inputs.indexOf(event.target) + (event.shiftKey ? -1 : 1)];
+    if (next) {
+      next.focus();
+      next.select();
+    } else {
+      event.target.blur();
+    }
+  });
+
+  // A focused number input changes on mouse wheel: scrolling the list must never edit stock
+  list.addEventListener('wheel', (event) => {
+    if (event.target === document.activeElement && event.target.classList?.contains('bs-qty')) event.target.blur();
+  }, { passive: true });
+
+  searchInput.addEventListener('input', applyFilters);
+
+  qs('.bs-chips', root).addEventListener('click', (event) => {
+    const chip = event.target.closest('.bs-chip');
+    if (!chip) return;
+    filter = chip.dataset.filter;
+    qsa('.bs-chip', root).forEach((node) => node.classList.toggle('active', node === chip));
+    applyFilters();
+  });
+
+  allBox.addEventListener('change', () => {
+    visibleRows().forEach((row) => {
+      row.selected = allBox.checked;
+      paintRow(row);
+    });
+    refreshSelection();
+  });
+
+  qs('.bs-mode', root).addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-mode]');
+    if (!btn) return;
+    mode = btn.dataset.mode;
+    qsa('.bs-mode [data-mode]', root).forEach((node) => {
+      node.classList.toggle('active', node === btn);
+      node.setAttribute('aria-checked', String(node === btn));
+    });
+    applyQty.placeholder = { set: 'Qtd.', add: '+ Qtd.', sub: '− Qtd.' }[mode];
+    applyQty.focus();
+  });
+
+  applyQty.addEventListener('input', refreshSelection);
+  applyQty.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    applyToSelected();
+  });
+  applyBtn.addEventListener('click', applyToSelected);
+
+  qs('[data-summary]', root).addEventListener('click', (event) => {
+    if (!event.target.closest('.bs-reset-all')) return;
+    changedRows().forEach((row) => setValue(row, row.current));
+    refreshSummary();
+    if (filter === 'changed') applyFilters();
+  });
+
+  qs('.bs-cancel', root).addEventListener('click', requestDrawerClose);
+
+  saveBtn.addEventListener('click', async () => {
+    const changed = changedRows();
+    if (!changed.length) return;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Salvando...</span>';
     try {
-      const btn = form.querySelector('[type="submit"]');
-      btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...';
-      await apiRequest('bulkAdjustInventory', { items, reason, mode: 'set' });
+      const result = await apiRequest('bulkAdjustInventory', {
+        items: changed.map((row) => ({ productId: row.id, quantity: row.value })),
+        reason: reasonInput.value.trim() || 'Atualização de estoque em lote',
+        mode: 'set'
+      });
       closeDrawer();
       await loadAllData();
-      showToast(`Estoque atualizado para ${items.length} produto(s).`);
-    } catch (err) {
-      showToast(err.message || 'Erro ao atualizar estoque em lote', 'error');
+      showToast(`Estoque atualizado em ${plural(Number(result?.updated ?? changed.length), 'peça', 'peças')}.`);
+    } catch (error) {
+      showToast(error.message || 'Erro ao atualizar o estoque em lote', 'error');
+      saveBtn.innerHTML = '<i class="fa-solid fa-check"></i><span></span>';
+      refreshSummary();
     }
   });
+
+  drawerCloseGuard = () => {
+    const pending = changedRows().length;
+    return !pending || confirm(`Descartar ${plural(pending, 'alteração', 'alterações')} de estoque?`);
+  };
+
+  refreshSummary();
+  refreshSelection();
 }
 
 // Product quick view: hover shows a passive preview, click pins an interactive one.
@@ -2131,6 +2414,7 @@ function buildProductQuickViewHtml(product) {
     if (price > 0) facts.push(['Margem', `${qvNumber(((price - cost) / price) * 100)}% · ${formatCurrency(price - cost)}`]);
   }
   if (product.supplierName) facts.push(['Fornecedor', escapeHtml(product.supplierName)]);
+  if (product.supplierRef) facts.push(['Ref. do fornecedor', escapeHtml(product.supplierRef)]);
   if (product.shipping !== '' && product.shipping !== null && product.shipping !== undefined) facts.push(['Frete', formatCurrency(product.shipping)]);
   if (product.weightGrams) facts.push(['Peso', `${qvNumber(product.weightGrams, 2)} g`]);
   if (product.dimensions) facts.push(['Dimensões', escapeHtml(product.dimensions)]);
@@ -3088,15 +3372,29 @@ function getClienteTelefone(nome) {
   return cliente?.telefone ? String(cliente.telefone) : '';
 }
 
-function openDrawer(contentHtml) {
+let drawerCloseGuard = null;
+
+function openDrawer(contentHtml, variant = '') {
+  drawerCloseGuard = null;
   dom.drawerBody.innerHTML = contentHtml;
+  const panel = dom.drawerBody.parentElement;
+  if (variant) panel.dataset.variant = variant;
+  else delete panel.dataset.variant;
   dom.drawer.classList.remove('hidden');
   applyInputMasks(dom.drawerBody);
 }
 
 function closeDrawer() {
+  drawerCloseGuard = null;
   dom.drawer.classList.add('hidden');
   dom.drawerBody.innerHTML = '';
+  delete dom.drawerBody.parentElement.dataset.variant;
+}
+
+// X button and backdrop click: the open drawer may veto closing (unsaved edits)
+function requestDrawerClose() {
+  if (drawerCloseGuard && !drawerCloseGuard()) return;
+  closeDrawer();
 }
 
 function openModal(contentHtml) {
@@ -4661,6 +4959,7 @@ function buildProductPayload(form) {
   return {
     id: formData.get('id') || '',
     sku: formData.get('sku') || '',
+    supplierRef: formData.get('supplierRef') || '',
     name: formData.get('name') || '',
     categoryName: formData.get('categoryName') || '',
     supplierName: formData.get('supplierName') || '',
@@ -4736,6 +5035,7 @@ function fillProductForm(product) {
   };
   set('id',               product.id || '');
   set('sku',              product.sku || '');
+  set('supplierRef',      product.supplierRef || '');
   set('name',             product.name || '');
   set('categoryName',     product.categoryName || '');
   set('supplierName',     product.supplierName || '');
@@ -5172,12 +5472,12 @@ function setupEvents() {
   window.addEventListener('resize', updateMenuIcon);
   dom.refreshBtn.addEventListener('click', loadAllData);
   dom.drawer.addEventListener('click', (event) => {
-    if (event.target === dom.drawer) closeDrawer();
+    if (event.target === dom.drawer) requestDrawerClose();
   });
   dom.modal.addEventListener('click', (event) => {
     if (event.target === dom.modal) closeModal();
   });
-  dom.drawerClose.addEventListener('click', closeDrawer);
+  dom.drawerClose.addEventListener('click', requestDrawerClose);
 
   applyInputMasks(dom.clienteForm);
 

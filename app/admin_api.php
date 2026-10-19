@@ -403,6 +403,7 @@ function admin_product_payload(array $row): array
         'id' => (int)$row['id'],
         'rowIndex' => (int)$row['id'],
         'sku' => $row['sku'],
+        'supplierRef' => $row['supplier_ref'] ?? '',
         'name' => $row['name'],
         'slug' => $row['slug'],
         'categoryId' => $row['category_id'] !== null ? (int)$row['category_id'] : null,
@@ -1144,6 +1145,12 @@ function admin_update_supplier(array $payload): array
     return admin_get_supplier($id);
 }
 
+function admin_supplier_ref_from_payload(array $payload): ?string
+{
+    $ref = mb_substr(trim((string)($payload['supplierRef'] ?? '')), 0, 100);
+    return $ref !== '' ? $ref : null;
+}
+
 function admin_supplier_id_from_payload(array $payload): ?int
 {
     $name = trim((string)($payload['supplierName'] ?? ''));
@@ -1171,17 +1178,19 @@ function admin_create_product(array $payload, array $user): array
         $sku = 'GAO-' . strtoupper(substr(slugify($name), 0, 10)) . '-' . random_int(1000, 9999);
     }
     $stock = (int)($payload['stockQty'] ?? $payload['stock_qty'] ?? 0);
+    ensure_products_supplier_ref();
 
     db()->beginTransaction();
     try {
         $stmt = db()->prepare(
-            'INSERT INTO products (category_id, supplier_id, sku, name, slug, short_description, description, status, product_type, price_cents, compare_at_cents, cost_cents, shipping_cents, track_stock, allow_backorder, stock_qty, low_stock_threshold, weight_grams, dimensions, notes, image_url, stripe_price_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO products (category_id, supplier_id, sku, supplier_ref, name, slug, short_description, description, status, product_type, price_cents, compare_at_cents, cost_cents, shipping_cents, track_stock, allow_backorder, stock_qty, low_stock_threshold, weight_grams, dimensions, notes, image_url, stripe_price_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             admin_category_id_from_payload($payload),
             admin_supplier_id_from_payload($payload),
             $sku,
+            admin_supplier_ref_from_payload($payload),
             $name,
             admin_unique_slug((string)($payload['slug'] ?? $name), 'products'),
             trim((string)($payload['shortDescription'] ?? '')) ?: null,
@@ -1239,12 +1248,16 @@ function admin_update_product(array $payload, array $user): array
     if ($id <= 0) {
         json_response(['ok' => false, 'error' => 'Produto invalido.'], 422);
     }
-    $currentStmt = db()->prepare('SELECT stock_qty FROM products WHERE id = ?');
+    ensure_products_supplier_ref();
+    $currentStmt = db()->prepare('SELECT stock_qty, supplier_ref FROM products WHERE id = ?');
     $currentStmt->execute([$id]);
-    $currentStock = $currentStmt->fetchColumn();
-    if ($currentStock === false) {
+    $current = $currentStmt->fetch();
+    if ($current === false) {
         json_response(['ok' => false, 'error' => 'Produto nao encontrado.'], 404);
     }
+    $currentStock = $current['stock_qty'];
+    // A tab still running the previous app version sends no supplierRef: keep the stored one
+    $supplierRef = array_key_exists('supplierRef', $payload) ? admin_supplier_ref_from_payload($payload) : $current['supplier_ref'];
     $newStock = (int)($payload['stockQty'] ?? $currentStock);
     $sku = strtoupper(trim((string)($payload['sku'] ?? '')));
     if ($sku === '') {
@@ -1255,7 +1268,7 @@ function admin_update_product(array $payload, array $user): array
     try {
         $stmt = db()->prepare(
             'UPDATE products
-             SET category_id = ?, supplier_id = ?, sku = ?, name = ?, slug = ?, short_description = ?, description = ?, status = ?, product_type = ?,
+             SET category_id = ?, supplier_id = ?, sku = ?, supplier_ref = ?, name = ?, slug = ?, short_description = ?, description = ?, status = ?, product_type = ?,
                  price_cents = ?, compare_at_cents = ?, cost_cents = ?, shipping_cents = ?, track_stock = ?, allow_backorder = ?, stock_qty = ?,
                  low_stock_threshold = ?, weight_grams = ?, dimensions = ?, notes = ?, image_url = ?, stripe_price_id = ?
              WHERE id = ?'
@@ -1264,6 +1277,7 @@ function admin_update_product(array $payload, array $user): array
             admin_category_id_from_payload($payload),
             admin_supplier_id_from_payload($payload),
             $sku,
+            $supplierRef,
             trim((string)($payload['name'] ?? '')),
             admin_unique_slug((string)($payload['slug'] ?? $payload['name'] ?? ('produto-' . $id)), 'products', $id),
             trim((string)($payload['shortDescription'] ?? '')) ?: null,

@@ -43,7 +43,7 @@ function fmt_date(?string $dt): string
 switch ($type) {
 
     case 'produtos':
-        fputcsv($out, ['SKU', 'Nome', 'Categoria', 'Preco_BRL', 'Custo_BRL', 'Estoque', 'Status', 'Tipo', 'Descricao_curta', 'Descricao']);
+        fputcsv($out, ['SKU', 'Ref_Fornecedor', 'Nome', 'Categoria', 'Preco_BRL', 'Custo_BRL', 'Estoque', 'Status', 'Tipo', 'Descricao_curta', 'Descricao']);
         if (!$template) {
             $rows = db()->query(
                 'SELECT p.*, c.name AS cat FROM products p
@@ -52,7 +52,7 @@ switch ($type) {
             )->fetchAll();
             foreach ($rows as $r) {
                 fputcsv($out, [
-                    $r['sku'], $r['name'], $r['cat'] ?? '',
+                    $r['sku'], $r['supplier_ref'] ?? '', $r['name'], $r['cat'] ?? '',
                     cents_to_brl($r['price_cents']), cents_to_brl($r['cost_cents']),
                     $r['stock_qty'], $r['status'], $r['product_type'],
                     $r['short_description'] ?? '', $r['description'] ?? '',

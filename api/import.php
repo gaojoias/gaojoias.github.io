@@ -130,6 +130,7 @@ function import_produtos(array $rows): array
     $errors   = [];
 
     $stmtCat = $pdo->prepare('SELECT id FROM product_categories WHERE name = ? LIMIT 1');
+    ensure_products_supplier_ref();
 
     foreach ($rows as $i => $r) {
         $lineNum = $i + 2;
@@ -137,6 +138,9 @@ function import_produtos(array $rows): array
         if (!$name) { $errors[] = "Linha {$lineNum}: Nome obrigatorio."; continue; }
 
         $sku    = trim($r['SKU'] ?? '');
+        // Older spreadsheets have no Ref_Fornecedor column: leave stored references untouched
+        $hasRef = array_key_exists('Ref_Fornecedor', $r);
+        $ref    = $hasRef ? (mb_substr(trim((string) $r['Ref_Fornecedor']), 0, 100) ?: null) : null;
         $price  = isset($r['Preco_BRL']) && $r['Preco_BRL'] !== '' ? parse_brl_to_cents($r['Preco_BRL']) : null;
         $cost   = isset($r['Custo_BRL']) && $r['Custo_BRL'] !== '' ? parse_brl_to_cents($r['Custo_BRL']) : null;
         $stock  = isset($r['Estoque']) && $r['Estoque'] !== '' ? (int) $r['Estoque'] : 0;
@@ -161,9 +165,9 @@ function import_produtos(array $rows): array
                 $pdo->prepare(
                     'UPDATE products SET name=?, slug=?, category_id=?, price_cents=?, cost_cents=?,
                      stock_qty=?, status=?, product_type=?,
-                     short_description=?, description=? WHERE id=?'
+                     short_description=?, description=?, supplier_ref = IF(? = 1, ?, supplier_ref) WHERE id=?'
                 )->execute([$name, $slug, $catId, $price, $cost, $stock, $status, $type,
-                    $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '', $existingId]);
+                    $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '', $hasRef ? 1 : 0, $ref, $existingId]);
                 $updated++;
                 continue;
             }
@@ -174,10 +178,10 @@ function import_produtos(array $rows): array
         $slug      = unique_product_slug($pdo, $name);
 
         $pdo->prepare(
-            'INSERT INTO products (sku, name, slug, category_id, price_cents, cost_cents,
+            'INSERT INTO products (sku, supplier_ref, name, slug, category_id, price_cents, cost_cents,
              stock_qty, status, product_type, short_description, description)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        )->execute([$finalSku, $name, $slug, $catId, $price, $cost, $stock, $status, $type,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$finalSku, $ref, $name, $slug, $catId, $price, $cost, $stock, $status, $type,
             $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '']);
         $inserted++;
     }

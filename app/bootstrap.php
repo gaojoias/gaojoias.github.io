@@ -204,6 +204,28 @@ function db(): PDO
     return $pdo;
 }
 
+// Product writes reference supplier_ref; create it on databases that predate
+// database/2026_10_product_supplier_ref.sql. Call outside transactions (DDL commits).
+function ensure_products_supplier_ref(): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+    $hasColumn = static fn(): bool => (bool)db()->query("SHOW COLUMNS FROM products LIKE 'supplier_ref'")->fetch();
+    if ($hasColumn()) {
+        return;
+    }
+    try {
+        db()->exec('ALTER TABLE products ADD COLUMN supplier_ref VARCHAR(100) NULL DEFAULT NULL AFTER sku');
+    } catch (PDOException $e) {
+        if (!$hasColumn()) {
+            throw $e;
+        }
+    }
+}
+
 function e(string|int|float|null $value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
