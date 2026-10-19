@@ -50,9 +50,15 @@ switch ($type) {
                  LEFT JOIN product_categories c ON c.id = p.category_id
                  ORDER BY p.name'
             )->fetchAll();
+            $categories = product_category_map_for(array_column($rows, 'id'));
             foreach ($rows as $r) {
+                // All categories, main one first, in the same format the importer reads
+                $names = array_column($categories[(int)$r['id']] ?? [], 'name');
+                if (!empty($r['cat'])) {
+                    $names = array_values(array_unique(array_merge([$r['cat']], $names)));
+                }
                 fputcsv($out, [
-                    $r['sku'], $r['supplier_ref'] ?? '', $r['name'], $r['cat'] ?? '',
+                    $r['sku'], $r['supplier_ref'] ?? '', $r['name'], implode('; ', $names),
                     cents_to_brl($r['price_cents']), cents_to_brl($r['cost_cents']),
                     $r['stock_qty'], $r['status'], $r['product_type'],
                     $r['short_description'] ?? '', $r['description'] ?? '',

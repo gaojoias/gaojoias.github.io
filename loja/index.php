@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $category         = trim((string)($_GET['categoria'] ?? ''));
 $categories       = store_categories();
 $products         = $category !== ''
-    ? store_product_query('c.slug = ?', [$category])
+    ? store_products_in_category($category)
     : store_product_query();
 $featured         = array_slice($products, 0, 4);
 $activeCategoryName = 'Todas as joias';

@@ -131,6 +131,7 @@ function import_produtos(array $rows): array
 
     $stmtCat = $pdo->prepare('SELECT id FROM product_categories WHERE name = ? LIMIT 1');
     ensure_products_supplier_ref();
+    ensure_product_category_map();
 
     foreach ($rows as $i => $r) {
         $lineNum = $i + 2;
@@ -149,11 +150,18 @@ function import_produtos(array $rows): array
         // Normalize legacy type names from CSV template
         if ($type === 'product') $type = 'physical';
 
-        $catId = null;
-        if (!empty($r['Categoria'])) {
-            $stmtCat->execute([$r['Categoria']]);
-            $catId = $stmtCat->fetchColumn() ?: null;
+        // "Categoria" may list several (separated by ; | or ,); only existing categories are matched.
+        // Without the column the product keeps its categories.
+        $hasCat = array_key_exists('Categoria', $r);
+        $catIds = [];
+        foreach ($hasCat ? preg_split('/[;|,]/', (string) $r['Categoria']) : [] as $catName) {
+            $catName = trim($catName);
+            if ($catName === '') continue;
+            $stmtCat->execute([$catName]);
+            $found = (int) $stmtCat->fetchColumn();
+            if ($found && !in_array($found, $catIds, true)) $catIds[] = $found;
         }
+        $catId = $catIds[0] ?? null;
 
         // UPDATE existing product when SKU matches
         if ($sku) {
@@ -163,11 +171,12 @@ function import_produtos(array $rows): array
             if ($existingId) {
                 $slug = unique_product_slug($pdo, $name, $existingId);
                 $pdo->prepare(
-                    'UPDATE products SET name=?, slug=?, category_id=?, price_cents=?, cost_cents=?,
+                    'UPDATE products SET name=?, slug=?, category_id = IF(? = 1, ?, category_id), price_cents=?, cost_cents=?,
                      stock_qty=?, status=?, product_type=?,
                      short_description=?, description=?, supplier_ref = IF(? = 1, ?, supplier_ref) WHERE id=?'
-                )->execute([$name, $slug, $catId, $price, $cost, $stock, $status, $type,
+                )->execute([$name, $slug, $hasCat ? 1 : 0, $catId, $price, $cost, $stock, $status, $type,
                     $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '', $hasRef ? 1 : 0, $ref, $existingId]);
+                if ($hasCat) sync_product_category_map($existingId, $catIds);
                 $updated++;
                 continue;
             }
@@ -183,6 +192,7 @@ function import_produtos(array $rows): array
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )->execute([$finalSku, $ref, $name, $slug, $catId, $price, $cost, $stock, $status, $type,
             $r['Descricao_curta'] ?? '', $r['Descricao'] ?? '']);
+        sync_product_category_map((int) $pdo->lastInsertId(), $catIds);
         $inserted++;
     }
     return ['inserted' => $inserted, 'updated' => $updated, 'errors' => $errors];

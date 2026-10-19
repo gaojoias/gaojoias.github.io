@@ -76,7 +76,6 @@ const dom = {
   productGrid: document.getElementById('product-grid'),
   productViewToggle: document.getElementById('product-view-toggle'),
   bulkStockBtn: document.getElementById('bulk-stock-btn'),
-  productCategories: document.getElementById('product-categories'),
   supplierDatalist: document.getElementById('supplier-datalist'),
   fornecedorForm: document.getElementById('fornecedor-form'),
   fornecedorFormReset: document.getElementById('fornecedor-form-reset'),
@@ -1859,11 +1858,6 @@ function productStatusBadge(status) {
 
 function renderProductOptions() {
   const products = state.data.produtos || [];
-  if (dom.productCategories) {
-    dom.productCategories.innerHTML = (state.data.categorias || [])
-      .map((cat) => `<option value="${escapeHtml(cat.name)}"></option>`)
-      .join('');
-  }
   if (dom.inventoryProduct) {
     const options = products.map((product) => `
       <option value="${product.id}">${escapeHtml(product.sku)} - ${escapeHtml(product.name)} (${product.availableQty} disp.)</option>
@@ -1882,7 +1876,7 @@ function getFilteredProducts() {
       String(product.sku || '').toLowerCase().includes(search) ||
       String(product.supplierRef || '').toLowerCase().includes(search) ||
       String(product.name || '').toLowerCase().includes(search) ||
-      String(product.categoryName || '').toLowerCase().includes(search) ||
+      productCategoryLabel(product).toLowerCase().includes(search) ||
       String(product.status || '').toLowerCase().includes(search)
     );
   });
@@ -1895,6 +1889,191 @@ function productImageList(product) {
 
 function productThumb(product) {
   return productImageList(product)[0] || '';
+}
+
+// All categories of a product, main one first ("categoryName" alone is the main one)
+function productCategoryLabel(product) {
+  const names = Array.isArray(product.categoryNames) && product.categoryNames.length ? product.categoryNames : [product.categoryName];
+  return names.filter(Boolean).join(', ');
+}
+
+// Multi-select category field: pick existing ones or type to create; the first is the main category
+let categoryPicker = null;
+
+function createCategoryPicker(root) {
+  if (!root) return null;
+  const field = qs('.cat-picker-field', root);
+  const input = qs('.cat-picker-input', root);
+  const menu = qs('.cat-picker-menu', root);
+  let selected = [];
+  let options = [];
+  let activeIndex = -1;
+
+  const clean = (name) => String(name || '').trim().replace(/\s+/g, ' ');
+  const keyOf = (name) => normalizeSearchText(clean(name));
+  const has = (name) => selected.some((item) => keyOf(item) === keyOf(name));
+  const known = () => {
+    const seen = new Set();
+    return [...(state.data.categorias || []).map((category) => clean(category.name)), ...selected]
+      .filter((name) => name && !seen.has(keyOf(name)) && seen.add(keyOf(name)));
+  };
+
+  function renderChips() {
+    qsa('.cat-chip', field).forEach((chip) => chip.remove());
+    selected.forEach((name, index) => {
+      const chip = document.createElement('span');
+      chip.className = `cat-chip${index === 0 ? ' is-main' : ''}`;
+      chip.dataset.index = String(index);
+      chip.title = index === 0 ? 'Categoria principal (exibida na loja)' : 'Clique para tornar principal';
+      chip.innerHTML = `${index === 0 ? '<i class="fa-solid fa-star"></i>' : ''}<span>${escapeHtml(name)}</span>`
+        + `<button type="button" class="cat-chip-remove" aria-label="Remover ${escapeHtml(name)}"><i class="fa-solid fa-xmark"></i></button>`;
+      field.insertBefore(chip, input);
+    });
+    input.placeholder = selected.length ? 'Adicionar outra…' : 'Selecione ou digite para criar';
+    root.classList.toggle('has-several', selected.length > 1);
+  }
+
+  function renderMenu() {
+    const query = clean(input.value);
+    const term = keyOf(query);
+    const names = known().filter((name) => !term || keyOf(name).includes(term)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    options = names.map((name) => ({ name, create: false }));
+    if (query && !known().some((name) => keyOf(name) === term)) options.push({ name: query, create: true });
+    if (activeIndex >= options.length) activeIndex = options.length - 1;
+    menu.innerHTML = options.length
+      ? options.map((option, index) => {
+        const active = index === activeIndex ? ' is-active' : '';
+        if (option.create) {
+          return `<div class="cat-option cat-option--create${active}" role="option" data-index="${index}"><i class="fa-solid fa-plus"></i><span>Criar categoria “${escapeHtml(option.name)}”</span></div>`;
+        }
+        const on = has(option.name);
+        return `<div class="cat-option${on ? ' is-selected' : ''}${active}" role="option" aria-selected="${on}" data-index="${index}"><span class="cat-option-check"><i class="fa-solid fa-check"></i></span><span>${escapeHtml(option.name)}</span></div>`;
+      }).join('')
+      : '<div class="cat-empty">Nenhuma categoria cadastrada. Digite para criar.</div>';
+  }
+
+  function open() {
+    menu.hidden = false;
+    root.classList.add('is-open');
+    input.setAttribute('aria-expanded', 'true');
+    renderMenu();
+  }
+
+  function close() {
+    menu.hidden = true;
+    root.classList.remove('is-open');
+    input.setAttribute('aria-expanded', 'false');
+    activeIndex = -1;
+  }
+
+  function add(name) {
+    const value = clean(name);
+    if (value && !has(value)) selected.push(value);
+  }
+
+  function choose(index) {
+    const option = options[index];
+    if (!option) return;
+    if (!option.create && has(option.name)) selected = selected.filter((item) => keyOf(item) !== keyOf(option.name));
+    else add(option.name);
+    input.value = '';
+    activeIndex = -1;
+    renderChips();
+    renderMenu();
+  }
+
+  // Text typed but not confirmed still counts (Enter, comma or saving the form)
+  function commitTyped() {
+    const query = clean(input.value);
+    if (!query) return;
+    add(known().find((name) => keyOf(name) === keyOf(query)) || query);
+    input.value = '';
+    renderChips();
+  }
+
+  field.addEventListener('mousedown', (event) => {
+    if (event.target.closest('.cat-chip')) return;
+    if (event.target !== input) {
+      event.preventDefault();
+      input.focus();
+    }
+    open();
+  });
+
+  field.addEventListener('click', (event) => {
+    const chip = event.target.closest('.cat-chip');
+    if (!chip) return;
+    const index = Number(chip.dataset.index);
+    if (event.target.closest('.cat-chip-remove')) selected.splice(index, 1);
+    else if (index > 0) selected.unshift(...selected.splice(index, 1));
+    renderChips();
+    if (!menu.hidden) renderMenu();
+  });
+
+  input.addEventListener('focus', open);
+  input.addEventListener('input', () => {
+    activeIndex = clean(input.value) ? 0 : -1;
+    open();
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (menu.hidden) open();
+      if (!options.length) return;
+      activeIndex = (activeIndex + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+      renderMenu();
+      qs('.cat-option.is-active', menu)?.scrollIntoView({ block: 'nearest' });
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (activeIndex >= 0) choose(activeIndex);
+      else {
+        commitTyped();
+        renderMenu();
+      }
+    } else if ((event.key === ',' || event.key === ';') && clean(input.value)) {
+      event.preventDefault();
+      commitTyped();
+      renderMenu();
+    } else if (event.key === 'Backspace' && !input.value && selected.length) {
+      selected.pop();
+      renderChips();
+      renderMenu();
+    } else if (event.key === 'Escape' && !menu.hidden) {
+      event.preventDefault();
+      event.stopPropagation(); // closes only the list, not the product form
+      close();
+    } else if (event.key === 'Tab') {
+      close();
+    }
+  });
+
+  menu.addEventListener('mousedown', (event) => {
+    event.preventDefault(); // keeps the focus in the input
+    const option = event.target.closest('.cat-option');
+    if (option) choose(Number(option.dataset.index));
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!menu.hidden && !root.contains(event.target)) close();
+  });
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (!root.contains(document.activeElement)) close();
+  }, 0));
+
+  return {
+    setValues(names) {
+      selected = [];
+      (names || []).forEach(add);
+      input.value = '';
+      renderChips();
+      close();
+    },
+    values() {
+      commitTyped();
+      return selected.slice();
+    }
+  };
 }
 
 function renderProducts() {
@@ -1921,7 +2100,7 @@ function renderProducts() {
                 <span>${escapeHtml(product.name || '-')}</span>
               </div>
             </td>
-            <td data-label="Categoria">${escapeHtml(product.categoryName || '-')}</td>
+            <td data-label="Categoria">${escapeHtml(productCategoryLabel(product) || '-')}</td>
             <td data-label="Preço">${formatCurrency(product.price || 0)}</td>
             <td data-label="Estoque">
               <span class="badge ${stockClass}">${product.trackStock ? `${product.availableQty} disp. / ${product.stockQty} total` : 'Sem controle'}</span>
@@ -1955,7 +2134,7 @@ function renderProducts() {
         </div>
         <div class="product-card-body">
           <div class="product-card-name" title="${escapeHtml(product.name || '')}">${escapeHtml(product.name || '-')}</div>
-          <div class="product-card-sku">${escapeHtml(product.sku || '-')} · ${escapeHtml(product.categoryName || '-')}</div>
+          <div class="product-card-sku">${escapeHtml(product.sku || '-')} · ${escapeHtml(productCategoryLabel(product) || '-')}</div>
           <div class="product-card-meta">
             <span class="product-card-price">${formatCurrency(product.price || 0)}</span>
             <span class="badge ${stockClass} product-card-stock">${product.trackStock ? `${product.availableQty}/${product.stockQty}` : '∞'}</span>
@@ -1980,7 +2159,7 @@ function bulkStockRowHtml(row) {
   const meta = [
     product.sku ? `SKU ${product.sku}` : '',
     product.supplierRef ? `Ref. ${product.supplierRef}` : '',
-    product.categoryName || ''
+    productCategoryLabel(product)
   ].filter(Boolean).map(escapeHtml).join(' · ');
   const reserved = Number(product.reservedQty || 0);
   const statusText = { ok: 'em estoque', low: 'estoque baixo', out: 'esgotada' }[row.status];
@@ -2027,7 +2206,7 @@ function openBulkStockDrawer() {
       value: current,
       selected: false,
       status: available <= 0 ? 'out' : available <= Number(product.lowStockThreshold || 0) ? 'low' : 'ok',
-      search: normalizeSearchText([product.name, product.sku, product.supplierRef, product.categoryName].join(' ')),
+      search: normalizeSearchText([product.name, product.sku, product.supplierRef, productCategoryLabel(product)].join(' ')),
       product
     };
   });
@@ -2448,7 +2627,7 @@ function buildProductQuickViewHtml(product) {
     <div class="qv-info">
       <div class="qv-head">
         <div class="qv-title">
-          <span class="qv-eyebrow">${escapeHtml([product.sku, product.categoryName].filter(Boolean).join(' · ') || 'Sem SKU')}</span>
+          <span class="qv-eyebrow">${escapeHtml([product.sku, productCategoryLabel(product)].filter(Boolean).join(' · ') || 'Sem SKU')}</span>
           <h4 id="product-qv-title">${escapeHtml(product.name || '-')}</h4>
         </div>
         <div class="qv-head-side">
@@ -4954,6 +5133,7 @@ async function handleVendaSubmit(event) {
 function buildProductPayload(form) {
   const formData = new FormData(form);
   const imageUrls = formData.getAll('imageUrls[]').filter((u) => u && String(u).trim() !== '');
+  const categoryNames = categoryPicker ? categoryPicker.values() : [];
   const weightRaw = formData.get('weightGrams');
   const shippingRaw = formData.get('shipping');
   return {
@@ -4961,7 +5141,8 @@ function buildProductPayload(form) {
     sku: formData.get('sku') || '',
     supplierRef: formData.get('supplierRef') || '',
     name: formData.get('name') || '',
-    categoryName: formData.get('categoryName') || '',
+    categoryName: categoryNames[0] || '',
+    categoryNames,
     supplierName: formData.get('supplierName') || '',
     status: formData.get('status') || 'draft',
     productType: 'physical',
@@ -5176,6 +5357,7 @@ function resetProductForm() {
     const el = dom.productForm.querySelector(`[name="${n}"]`);
     if (el) el.value = '';
   });
+  categoryPicker?.setValues([]);
   clearProductPhotos(dom.productForm);
 }
 
@@ -5189,7 +5371,7 @@ function fillProductForm(product) {
   set('sku',              product.sku || '');
   set('supplierRef',      product.supplierRef || '');
   set('name',             product.name || '');
-  set('categoryName',     product.categoryName || '');
+  categoryPicker?.setValues(product.categoryNames?.length ? product.categoryNames : [product.categoryName]);
   set('supplierName',     product.supplierName || '');
   set('status',           product.status || 'draft');
   set('price',            product.price || 0);
@@ -5639,6 +5821,7 @@ function setupEvents() {
   if (dom.productForm) dom.productForm.addEventListener('submit', handleProductSubmit);
   if (dom.productFormReset) dom.productFormReset.addEventListener('click', resetProductForm);
   setupProductPhotoReorder();
+  categoryPicker = createCategoryPicker(document.getElementById('product-category-picker'));
   if (dom.inventoryForm) dom.inventoryForm.addEventListener('submit', handleInventorySubmit);
   dom.financeiroForm.addEventListener('submit', handleFinanceiroSubmit);
   dom.lembreteForm.addEventListener('submit', handleLembreteSubmit);

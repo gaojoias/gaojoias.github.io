@@ -58,14 +58,31 @@ function store_product_query(string $where = '', array $params = []): array
     return $stmt->fetchAll();
 }
 
+// A product shows up in every category it belongs to, not only in its main one
+function store_products_in_category(string $slug): array
+{
+    ensure_product_category_map();
+    return store_product_query(
+        '(c.slug = ? OR EXISTS (
+            SELECT 1 FROM product_category_map m
+            JOIN product_categories mc ON mc.id = m.category_id
+            WHERE m.product_id = p.id AND mc.slug = ?))',
+        [$slug, $slug]
+    );
+}
+
 function store_categories(): array
 {
+    ensure_product_category_map();
     return db()->query(
-        'SELECT c.*, COUNT(p.id) AS products_count
+        'SELECT c.*,
+                (SELECT COUNT(*) FROM products p
+                  WHERE p.status = "active"
+                    AND (p.category_id = c.id
+                         OR EXISTS (SELECT 1 FROM product_category_map m WHERE m.product_id = p.id AND m.category_id = c.id))
+                ) AS products_count
          FROM product_categories c
-         LEFT JOIN products p ON p.category_id = c.id AND p.status = "active"
          WHERE c.is_active = 1
-         GROUP BY c.id
          ORDER BY c.sort_order ASC, c.name ASC'
     )->fetchAll();
 }

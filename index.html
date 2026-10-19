@@ -1067,7 +1067,18 @@
             <label>SKU<input type="text" name="sku" placeholder="Ex: GAO-ALI-001" /></label>
             <label>Referência do fornecedor<input type="text" name="supplierRef" maxlength="100" placeholder="Código da peça no fornecedor" autocomplete="off" /></label>
             <label>Nome do produto<input type="text" name="name" required placeholder="Ex: Anel Solitário Ouro 18k" /></label>
-            <label>Categoria<input type="text" name="categoryName" id="product-category" list="product-categories" placeholder="Ex: Anéis" /></label>
+            <div class="cat-field">
+              <label class="cat-field-label" for="product-category-input">Categorias</label>
+              <div class="cat-picker" id="product-category-picker">
+                <div class="cat-picker-box">
+                  <div class="cat-picker-field">
+                    <input type="text" id="product-category-input" class="cat-picker-input" placeholder="Selecione ou digite para criar" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="product-category-menu" />
+                  </div>
+                  <div class="cat-picker-menu" id="product-category-menu" role="listbox" aria-multiselectable="true" hidden></div>
+                </div>
+                <p class="cat-picker-hint"><i class="fa-solid fa-star"></i> A principal aparece na loja. Clique em outra para torná-la principal.</p>
+              </div>
+            </div>
             <label>Fornecedor<input type="text" name="supplierName" id="product-supplier" list="supplier-datalist" placeholder="Digite ou selecione" /></label>
             <label>Status
               <select name="status">
@@ -1175,7 +1186,6 @@
           </div>
         </div>
 
-        <datalist id="product-categories"></datalist>
         <datalist id="supplier-datalist"></datalist>
         <div class="form-actions full">
           <button class="btn btn-primary" type="submit">Salvar produto</button>

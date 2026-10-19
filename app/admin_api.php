@@ -380,8 +380,29 @@ function admin_category_payload(array $row): array
     ];
 }
 
-function admin_product_payload(array $row): array
+// Main category (products.category_id) first, then the others from product_category_map
+function admin_product_category_list(array $row, ?array $categories): array
 {
+    $id = (int)$row['id'];
+    $categories ??= product_category_map_for([$id])[$id] ?? [];
+    $mainId = $row['category_id'] !== null ? (int)$row['category_id'] : 0;
+    if (!$mainId) {
+        return array_values($categories);
+    }
+    $main = ['id' => $mainId, 'name' => (string)($row['category_name'] ?? ''), 'slug' => ''];
+    foreach ($categories as $index => $category) {
+        if ($category['id'] === $mainId) {
+            $main = $category;
+            unset($categories[$index]);
+            break;
+        }
+    }
+    return array_merge([$main], array_values($categories));
+}
+
+function admin_product_payload(array $row, ?array $categories = null): array
+{
+    $categories = admin_product_category_list($row, $categories);
     $available = (int)$row['stock_qty'] - (int)$row['reserved_qty'];
     $primaryUrl = $row['image_url'] ?? '';
 
@@ -408,6 +429,8 @@ function admin_product_payload(array $row): array
         'slug' => $row['slug'],
         'categoryId' => $row['category_id'] !== null ? (int)$row['category_id'] : null,
         'categoryName' => $row['category_name'] ?? '',
+        'categoryIds' => array_column($categories, 'id'),
+        'categoryNames' => array_column($categories, 'name'),
         'supplierId' => $row['supplier_id'] !== null ? (int)$row['supplier_id'] : null,
         'supplierName' => $row['supplier_name'] ?? '',
         'shortDescription' => $row['short_description'] ?? '',
@@ -631,6 +654,7 @@ function admin_list_all(array $user): array
          LEFT JOIN suppliers s ON s.id = p.supplier_id
          ORDER BY p.updated_at DESC, p.id DESC'
     )->fetchAll();
+    $productCategories = product_category_map_for(array_column($products, 'id'));
 
     $finance = [];
     $reminders = [];
@@ -661,7 +685,10 @@ function admin_list_all(array $user): array
         'logs' => array_map('admin_log_payload', $logs),
         'categorias' => array_map('admin_category_payload', $categories),
         'fornecedores' => array_map('admin_supplier_payload', $suppliers),
-        'produtos' => array_map('admin_product_payload', $products),
+        'produtos' => array_map(
+            static fn(array $row): array => admin_product_payload($row, $productCategories[(int)$row['id']] ?? []),
+            $products
+        ),
         'inventoryMovements' => array_map('admin_inventory_payload', $inventory),
         'pedidos' => array_map('admin_order_payload', $orders),
     ];
@@ -1145,6 +1172,31 @@ function admin_update_supplier(array $payload): array
     return admin_get_supplier($id);
 }
 
+// Categories chosen in the form ("categoryNames"; unknown names are created). A tab still on
+// the previous version sends only "categoryName": it sets the main category and keeps the others.
+function admin_category_ids_from_payload(array $payload, ?int $productId = null): ?array
+{
+    if (isset($payload['categoryNames']) && is_array($payload['categoryNames'])) {
+        $ids = [];
+        foreach ($payload['categoryNames'] as $name) {
+            $id = admin_category_id_from_payload(['categoryName' => (string)$name]);
+            if ($id && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+        return $ids;
+    }
+    if (!array_key_exists('categoryName', $payload) && !array_key_exists('categoryId', $payload) && !array_key_exists('category', $payload)) {
+        return null;
+    }
+    $main = admin_category_id_from_payload($payload);
+    if (!$main) {
+        return [];
+    }
+    $current = $productId ? array_column(product_category_map_for([$productId])[$productId] ?? [], 'id') : [];
+    return array_values(array_unique(array_merge([$main], $current)));
+}
+
 function admin_supplier_ref_from_payload(array $payload): ?string
 {
     $ref = mb_substr(trim((string)($payload['supplierRef'] ?? '')), 0, 100);
@@ -1179,6 +1231,8 @@ function admin_create_product(array $payload, array $user): array
     }
     $stock = (int)($payload['stockQty'] ?? $payload['stock_qty'] ?? 0);
     ensure_products_supplier_ref();
+    ensure_product_category_map();
+    $categoryIds = admin_category_ids_from_payload($payload) ?? [];
 
     db()->beginTransaction();
     try {
@@ -1187,7 +1241,7 @@ function admin_create_product(array $payload, array $user): array
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
-            admin_category_id_from_payload($payload),
+            $categoryIds[0] ?? null,
             admin_supplier_id_from_payload($payload),
             $sku,
             admin_supplier_ref_from_payload($payload),
@@ -1212,6 +1266,7 @@ function admin_create_product(array $payload, array $user): array
             trim((string)($payload['stripePriceId'] ?? '')) ?: null,
         ]);
         $id = (int)db()->lastInsertId();
+        sync_product_category_map($id, $categoryIds);
         if ($stock !== 0) {
             admin_record_inventory_movement($id, 'initial', $stock, 'Estoque inicial', null, null, (int)$user['id'], 0);
         }
@@ -1249,13 +1304,18 @@ function admin_update_product(array $payload, array $user): array
         json_response(['ok' => false, 'error' => 'Produto invalido.'], 422);
     }
     ensure_products_supplier_ref();
-    $currentStmt = db()->prepare('SELECT stock_qty, supplier_ref FROM products WHERE id = ?');
+    ensure_product_category_map();
+    $currentStmt = db()->prepare('SELECT stock_qty, supplier_ref, category_id FROM products WHERE id = ?');
     $currentStmt->execute([$id]);
     $current = $currentStmt->fetch();
     if ($current === false) {
         json_response(['ok' => false, 'error' => 'Produto nao encontrado.'], 404);
     }
     $currentStock = $current['stock_qty'];
+    $categoryIds = admin_category_ids_from_payload($payload, $id); // null: categories not sent, keep them
+    $mainCategoryId = $categoryIds === null
+        ? ($current['category_id'] !== null ? (int)$current['category_id'] : null)
+        : ($categoryIds[0] ?? null);
     // A tab still running the previous app version sends no supplierRef: keep the stored one
     $supplierRef = array_key_exists('supplierRef', $payload) ? admin_supplier_ref_from_payload($payload) : $current['supplier_ref'];
     $newStock = (int)($payload['stockQty'] ?? $currentStock);
@@ -1274,7 +1334,7 @@ function admin_update_product(array $payload, array $user): array
              WHERE id = ?'
         );
         $stmt->execute([
-            admin_category_id_from_payload($payload),
+            $mainCategoryId,
             admin_supplier_id_from_payload($payload),
             $sku,
             $supplierRef,
@@ -1299,6 +1359,9 @@ function admin_update_product(array $payload, array $user): array
             trim((string)($payload['stripePriceId'] ?? '')) ?: null,
             $id,
         ]);
+        if ($categoryIds !== null) {
+            sync_product_category_map($id, $categoryIds);
+        }
         $diff = $newStock - (int)$currentStock;
         if ($diff !== 0) {
             admin_record_inventory_movement($id, 'adjustment', $diff, 'Ajuste pelo cadastro do produto', null, null, (int)$user['id'], (int)$currentStock);
@@ -1471,9 +1534,11 @@ function admin_delete_product(array $payload): bool
         throw new RuntimeException('ID inválido.');
     }
 
+    ensure_product_category_map();
     db()->beginTransaction();
     try {
         db()->prepare('DELETE FROM product_images WHERE product_id = ?')->execute([$id]);
+        db()->prepare('DELETE FROM product_category_map WHERE product_id = ?')->execute([$id]);
         db()->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);
         db()->commit();
     } catch (Throwable $e) {
