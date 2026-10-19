@@ -1162,6 +1162,7 @@
               <div class="photo-slot-progress"></div>
             </div>
           </div>
+          <p class="photo-order-hint"><i class="fa-solid fa-arrows-left-right"></i> Arraste as fotos para mudar a ordem. A primeira é a foto principal da loja.</p>
         </div>
 
         <!-- Observações -->
@@ -1487,6 +1488,7 @@
               preview.style.display = 'block';
               setTimeout(function () { if (progress) progress.style.transform = 'scaleX(0)'; }, 600);
             }
+            if (window.compactProductPhotos) window.compactProductPhotos(slot.closest('.photo-upload-grid'));
           })
           .catch(function () {
             slot.classList.remove('uploading');
@@ -1505,6 +1507,7 @@
         if (preview)  { preview.style.display = 'none'; }
         if (urlInput) { urlInput.value = ''; }
         if (fileInput){ fileInput.value = ''; }
+        if (window.compactProductPhotos) window.compactProductPhotos(slot.closest('.photo-upload-grid'));
       });
 
       /* -----------------------------------------------

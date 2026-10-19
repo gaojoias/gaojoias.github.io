@@ -4982,31 +4982,183 @@ function buildProductPayload(form) {
   };
 }
 
-function clearProductPhotos(form) {
-  const slots = form ? form.querySelectorAll('.photo-slot') : [];
-  slots.forEach((slot) => {
-    const preview  = slot.querySelector('.photo-slot-preview');
-    const urlInput = slot.querySelector('.photo-url-input');
-    const fileInput= slot.querySelector('.photo-file-input');
-    if (preview)  { preview.style.display = 'none'; const img = preview.querySelector('img'); if (img) img.src = ''; }
-    if (urlInput) urlInput.value = '';
-    if (fileInput) fileInput.value = '';
+function readProductPhotoUrls(grid) {
+  return qsa('.photo-slot', grid).map((slot) => (slot.querySelector('.photo-url-input')?.value || '').trim());
+}
+
+// Saved order = slot order (the first photo is the main one in the store)
+function writeProductPhotoUrls(grid, urls, animate = false) {
+  qsa('.photo-slot', grid).forEach((slot, index) => {
+    const url = urls[index] || '';
+    const input = slot.querySelector('.photo-url-input');
+    const preview = slot.querySelector('.photo-slot-preview');
+    const img = preview?.querySelector('img');
+    const changed = Boolean(input) && input.value !== url;
+    if (input) input.value = url;
+    if (img) {
+      if (!url) img.removeAttribute('src');
+      else if (img.getAttribute('src') !== url) img.src = url;
+    }
+    if (preview) preview.style.display = url ? 'block' : 'none';
+    slot.classList.toggle('has-photo', Boolean(url));
+    if (animate && changed && url) {
+      slot.classList.remove('photo-shift');
+      void slot.offsetWidth;
+      slot.classList.add('photo-shift');
+    }
   });
+  grid.classList.toggle('can-reorder', urls.filter(Boolean).length > 1);
+}
+
+// Keeps photos side by side from the first slot, with no gaps
+function compactProductPhotos(grid) {
+  if (grid) writeProductPhotoUrls(grid, readProductPhotoUrls(grid).filter(Boolean));
+}
+window.compactProductPhotos = compactProductPhotos;
+
+function clearProductPhotos(form) {
+  const grid = form?.querySelector('.photo-upload-grid');
+  if (!grid) return;
+  writeProductPhotoUrls(grid, []);
+  qsa('.photo-file-input', grid).forEach((input) => { input.value = ''; });
 }
 
 function fillProductPhotos(form, imageUrls) {
   clearProductPhotos(form);
-  const slots = form ? form.querySelectorAll('.photo-slot') : [];
-  (imageUrls || []).forEach((url, i) => {
-    if (!url || i >= slots.length) return;
-    const slot     = slots[i];
-    const preview  = slot.querySelector('.photo-slot-preview');
-    const img      = slot.querySelector('.photo-slot-preview img');
-    const urlInput = slot.querySelector('.photo-url-input');
-    if (urlInput) urlInput.value = url;
-    if (img)     img.src = url;
-    if (preview) preview.style.display = 'block';
+  const grid = form?.querySelector('.photo-upload-grid');
+  if (grid) writeProductPhotoUrls(grid, (imageUrls || []).filter(Boolean));
+}
+
+// Drag to reorder photos: mouse drags after a few pixels, touch after a short press-and-hold
+const PHOTO_DRAG_THRESHOLD = 6;
+const PHOTO_LONG_PRESS_MS = 280;
+let photoDrag = null;
+let suppressPhotoClick = false;
+
+function photoTargetIndex(grid, x, y, count) {
+  let best = 0;
+  let bestDistance = Infinity;
+  qsa('.photo-slot', grid).slice(0, count).forEach((slot, index) => {
+    const rect = slot.getBoundingClientRect();
+    const distance = Math.hypot(x - (rect.left + rect.width / 2), y - (rect.top + rect.height / 2));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = index;
+    }
   });
+  return best;
+}
+
+function handlePhotoPointerDown(event) {
+  if (event.pointerType === 'mouse' && event.button !== 0) return;
+  const grid = event.currentTarget;
+  const slot = event.target.closest('.photo-slot');
+  if (!slot || event.target.closest('.photo-remove-btn') || !slot.classList.contains('has-photo')) return;
+  if (grid.querySelector('.photo-slot.uploading')) return;
+  const pressedUrl = slot.querySelector('.photo-url-input').value;
+  compactProductPhotos(grid);
+  const urls = readProductPhotoUrls(grid).filter(Boolean);
+  if (urls.length < 2) return;
+  const from = urls.indexOf(pressedUrl);
+  photoDrag = {
+    grid, urls, from, current: from,
+    pointerId: event.pointerId,
+    touch: event.pointerType !== 'mouse',
+    startX: event.clientX, startY: event.clientY,
+    lastX: event.clientX, lastY: event.clientY,
+    active: false, ghost: null, timer: 0
+  };
+  if (photoDrag.touch) photoDrag.timer = setTimeout(startPhotoDrag, PHOTO_LONG_PRESS_MS);
+}
+
+function startPhotoDrag() {
+  const drag = photoDrag;
+  if (!drag || drag.active) return;
+  const slot = qsa('.photo-slot', drag.grid)[drag.from];
+  const rect = slot.getBoundingClientRect();
+  drag.active = true;
+  drag.offsetX = drag.startX - rect.left;
+  drag.offsetY = drag.startY - rect.top;
+  const ghost = document.createElement('div');
+  ghost.className = 'photo-drag-ghost';
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  ghost.innerHTML = `<img src="${escapeHtml(drag.urls[drag.from])}" alt="" />`;
+  document.body.appendChild(ghost);
+  drag.ghost = ghost;
+  document.body.classList.add('photo-dragging');
+  slot.classList.add('is-drag-target');
+  positionPhotoGhost();
+  if (drag.touch && navigator.vibrate) navigator.vibrate(12);
+}
+
+function positionPhotoGhost() {
+  const { ghost, lastX, lastY, offsetX, offsetY } = photoDrag;
+  ghost.style.transform = `translate3d(${lastX - offsetX}px, ${lastY - offsetY}px, 0) scale(1.06)`;
+}
+
+function handlePhotoPointerMove(event) {
+  const drag = photoDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  drag.lastX = event.clientX;
+  drag.lastY = event.clientY;
+  if (!drag.active) {
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.touch && distance >= PHOTO_DRAG_THRESHOLD) startPhotoDrag();
+    else if (drag.touch && distance > 10) endPhotoDrag(false); // finger moved early: it is a scroll
+    return;
+  }
+  positionPhotoGhost();
+  const target = photoTargetIndex(drag.grid, event.clientX, event.clientY, drag.urls.length);
+  if (target === drag.current) return;
+  const order = drag.urls.slice();
+  order.splice(target, 0, order.splice(drag.from, 1)[0]);
+  writeProductPhotoUrls(drag.grid, order, true);
+  qsa('.photo-slot', drag.grid).forEach((slot, index) => slot.classList.toggle('is-drag-target', index === target));
+  drag.current = target;
+}
+
+function endPhotoDrag(restore) {
+  const drag = photoDrag;
+  if (!drag) return;
+  photoDrag = null;
+  clearTimeout(drag.timer);
+  if (!drag.active) return;
+  if (restore) writeProductPhotoUrls(drag.grid, drag.urls);
+  drag.ghost.remove();
+  document.body.classList.remove('photo-dragging');
+  qsa('.photo-slot', drag.grid).forEach((slot) => slot.classList.remove('is-drag-target'));
+  // The click that follows the release would open the file picker
+  suppressPhotoClick = true;
+  setTimeout(() => { suppressPhotoClick = false; }, 300);
+}
+
+function setupProductPhotoReorder() {
+  const grid = document.getElementById('product-photos');
+  if (!grid) return;
+  grid.addEventListener('pointerdown', handlePhotoPointerDown);
+  grid.addEventListener('click', (event) => {
+    if (!suppressPhotoClick) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressPhotoClick = false;
+  }, true);
+  grid.addEventListener('contextmenu', (event) => {
+    if (photoDrag) event.preventDefault();
+  });
+  window.addEventListener('pointermove', handlePhotoPointerMove);
+  window.addEventListener('pointerup', (event) => {
+    if (photoDrag && event.pointerId === photoDrag.pointerId) endPhotoDrag(false);
+  });
+  window.addEventListener('pointercancel', () => endPhotoDrag(true));
+  window.addEventListener('touchmove', (event) => {
+    if (photoDrag?.active) event.preventDefault();
+  }, { passive: false });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !photoDrag?.active) return;
+    event.stopPropagation();
+    endPhotoDrag(true);
+  }, true);
 }
 
 function resetProductForm() {
@@ -5486,6 +5638,7 @@ function setupEvents() {
   dom.vendaForm.addEventListener('submit', handleVendaSubmit);
   if (dom.productForm) dom.productForm.addEventListener('submit', handleProductSubmit);
   if (dom.productFormReset) dom.productFormReset.addEventListener('click', resetProductForm);
+  setupProductPhotoReorder();
   if (dom.inventoryForm) dom.inventoryForm.addEventListener('submit', handleInventorySubmit);
   dom.financeiroForm.addEventListener('submit', handleFinanceiroSubmit);
   dom.lembreteForm.addEventListener('submit', handleLembreteSubmit);
