@@ -226,6 +226,69 @@ function ensure_products_supplier_ref(): void
     }
 }
 
+// Products can belong to several categories; products.category_id stays as the main one
+// (shown in the store). Creates the link table and copies each product's current category.
+function ensure_product_category_map(): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+    if (db()->query("SHOW TABLES LIKE 'product_category_map'")->fetch()) {
+        return;
+    }
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS product_category_map (
+           product_id BIGINT UNSIGNED NOT NULL,
+           category_id BIGINT UNSIGNED NOT NULL,
+           sort_order INT NOT NULL DEFAULT 0,
+           PRIMARY KEY (product_id, category_id),
+           INDEX idx_pcm_category (category_id),
+           CONSTRAINT fk_pcm_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+           CONSTRAINT fk_pcm_category FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+    );
+    db()->exec(
+        'INSERT IGNORE INTO product_category_map (product_id, category_id, sort_order)
+         SELECT id, category_id, 0 FROM products WHERE category_id IS NOT NULL'
+    );
+}
+
+/** @return array<int, list<array{id:int, name:string, slug:string}>> categories per product, main first */
+function product_category_map_for(array $productIds): array
+{
+    $productIds = array_values(array_unique(array_filter(array_map('intval', $productIds))));
+    if (!$productIds) {
+        return [];
+    }
+    ensure_product_category_map();
+    $in = implode(',', array_fill(0, count($productIds), '?'));
+    $stmt = db()->prepare(
+        "SELECT m.product_id, c.id, c.name, c.slug
+         FROM product_category_map m
+         JOIN product_categories c ON c.id = m.category_id
+         WHERE m.product_id IN ($in)
+         ORDER BY m.product_id, m.sort_order, c.name"
+    );
+    $stmt->execute($productIds);
+    $map = [];
+    foreach ($stmt->fetchAll() as $row) {
+        $map[(int)$row['product_id']][] = ['id' => (int)$row['id'], 'name' => (string)$row['name'], 'slug' => (string)$row['slug']];
+    }
+    return $map;
+}
+
+// Callers keep products.category_id equal to the first id; run ensure_product_category_map() before any transaction
+function sync_product_category_map(int $productId, array $categoryIds): void
+{
+    db()->prepare('DELETE FROM product_category_map WHERE product_id = ?')->execute([$productId]);
+    $insert = db()->prepare('INSERT INTO product_category_map (product_id, category_id, sort_order) VALUES (?, ?, ?)');
+    foreach (array_values($categoryIds) as $position => $categoryId) {
+        $insert->execute([$productId, (int)$categoryId, $position]);
+    }
+}
+
 function e(string|int|float|null $value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
