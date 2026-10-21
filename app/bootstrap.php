@@ -126,6 +126,23 @@ function app_apply_env_config(array $config): array
     return $config;
 }
 
+// Stripe keys saved in Configurações → Pagamentos. Kept next to public_html (like
+// gaoapp_config.php) so git deploys never delete them and they never reach the repository.
+function stripe_settings_path(): string
+{
+    return dirname(__DIR__, 2) . '/gaoapp_stripe.json';
+}
+
+function stripe_settings_load(): array
+{
+    $path = stripe_settings_path();
+    if (!is_file($path)) {
+        return [];
+    }
+    $data = json_decode((string)file_get_contents($path), true);
+    return is_array($data) ? $data : [];
+}
+
 $configPath        = __DIR__ . '/../config/config.php';
 $serverConfigPath  = __DIR__ . '/../../gaoapp_config.php'; // outside public_html, safe from git deploy
 $exampleConfigPath = __DIR__ . '/../config/config.example.php';
@@ -136,6 +153,12 @@ if (file_exists($configPath)) {
     $config = require $serverConfigPath;
 } else {
     $config = require $exampleConfigPath;
+}
+$stripeSaved = stripe_settings_load();
+foreach (['secret_key', 'webhook_secret'] as $stripeField) {
+    if ((string)($stripeSaved[$stripeField] ?? '') !== '') {
+        $config['stripe'][$stripeField] = (string)$stripeSaved[$stripeField];
+    }
 }
 $config = app_apply_env_config($config);
 

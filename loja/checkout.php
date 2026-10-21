@@ -11,9 +11,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+$stripeReady = (string)app_config('stripe.secret_key', '') !== '';
+$order = null;
+
 try {
-    if ((string)app_config('stripe.secret_key', '') === '') {
-        throw new RuntimeException('Configure a chave secreta da Stripe antes de abrir o checkout.');
+    if (!$stripeReady) {
+        throw new RuntimeException('Stripe nao conectada (Configuracoes > Pagamentos no painel).');
     }
     $order = store_create_order([
         'name' => $_POST['name'] ?? '',
@@ -28,7 +31,24 @@ try {
     header('Location: ' . $session['url'], true, 303);
     exit;
 } catch (Throwable $e) {
-    $_SESSION['store_error'] = $e->getMessage();
+    // Cart/form errors are written for the customer; payment failures are technical
+    if (!$stripeReady || $order !== null) {
+        error_log('[checkout] ' . $e->getMessage());
+        if ($order !== null) {
+            try {
+                db()->beginTransaction();
+                store_release_order_reservation((int)$order['id']);
+                db()->commit();
+            } catch (Throwable) {
+                if (db()->inTransaction()) {
+                    db()->rollBack();
+                }
+            }
+        }
+        $_SESSION['store_error'] = 'Não foi possível abrir o pagamento agora. Tente novamente em instantes ou fale conosco pelo WhatsApp.';
+    } else {
+        $_SESSION['store_error'] = $e->getMessage();
+    }
     header('Location: cart.php');
     exit;
 }

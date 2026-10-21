@@ -290,19 +290,25 @@ function store_order_items(int $orderId): array
     return $stmt->fetchAll();
 }
 
-function store_stripe_request(string $method, string $endpoint, array $params = []): array
+// $secret: test a key before saving it; defaults to the configured one
+function store_stripe_request(string $method, string $endpoint, array $params = [], ?string $secret = null): array
 {
-    $secret = (string)app_config('stripe.secret_key', '');
+    $secret ??= (string)app_config('stripe.secret_key', '');
     if ($secret === '') {
-        throw new RuntimeException('Configure a chave secreta da Stripe em config/config.php.');
+        throw new RuntimeException('Stripe nao conectada. Conecte a conta em Configuracoes > Pagamentos.');
     }
 
-    $url = 'https://api.stripe.com/v1/' . ltrim($endpoint, '/');
+    $method = strtoupper($method);
+    $url = rtrim((string)app_config('stripe.api_base', 'https://api.stripe.com/v1'), '/') . '/' . ltrim($endpoint, '/');
     $body = http_build_query($params);
+    if ($method !== 'POST' && $body !== '') {
+        $url .= '?' . $body;
+        $body = '';
+    }
     if (!function_exists('curl_init')) {
         $context = stream_context_create([
             'http' => [
-                'method' => strtoupper($method),
+                'method' => $method,
                 'header' => "Authorization: Basic " . base64_encode($secret . ':') . "\r\nContent-Type: application/x-www-form-urlencoded\r\n",
                 'content' => $body,
                 'ignore_errors' => true,
@@ -311,13 +317,17 @@ function store_stripe_request(string $method, string $endpoint, array $params = 
         $response = file_get_contents($url, false, $context);
     } else {
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        $options = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_USERPWD => $secret . ':',
-            CURLOPT_POST => strtoupper($method) === 'POST',
-            CURLOPT_POSTFIELDS => $body,
+            CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
-        ]);
+        ];
+        // Setting a body would turn any request into a POST
+        if ($method === 'POST') {
+            $options[CURLOPT_POSTFIELDS] = $body;
+        }
+        curl_setopt_array($ch, $options);
         $response = curl_exec($ch);
         if ($response === false) {
             $error = curl_error($ch);

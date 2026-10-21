@@ -1766,6 +1766,150 @@ function mkt_save_metrics(array $payload): array
     return mkt_metrics_payload($stmt->fetch());
 }
 
+/* ── PAGAMENTOS (Stripe) ─────────────────────────────────── */
+
+const STRIPE_WEBHOOK_EVENTS = [
+    'checkout.session.completed',
+    'checkout.session.async_payment_succeeded',
+    'checkout.session.async_payment_failed',
+    'checkout.session.expired',
+];
+
+function admin_stripe_key_hint(string $key): string
+{
+    if ($key === '') {
+        return '';
+    }
+    preg_match('/^(sk|rk)_(test|live)_/', $key, $match);
+    return ($match[0] ?? '') . '…' . substr($key, -4);
+}
+
+function admin_stripe_error_message(Throwable $e): string
+{
+    $message = $e->getMessage();
+    if (stripos($message, 'Invalid API Key') !== false) {
+        return 'Chave inválida. Copie a chave secreta completa em Desenvolvedores → Chaves de API, no painel da Stripe.';
+    }
+    if (stripos($message, 'permission') !== false || stripos($message, 'restricted') !== false) {
+        return 'Esta chave não tem permissão suficiente. Use a chave secreta padrão (sk_…).';
+    }
+    return $message;
+}
+
+function admin_stripe_account_summary(array $account): array
+{
+    return [
+        'id' => (string)($account['id'] ?? ''),
+        'name' => (string)($account['business_profile']['name'] ?? $account['settings']['dashboard']['display_name'] ?? ''),
+        'email' => (string)($account['email'] ?? ''),
+        'country' => (string)($account['country'] ?? ''),
+        'chargesEnabled' => (bool)($account['charges_enabled'] ?? false),
+        'payoutsEnabled' => (bool)($account['payouts_enabled'] ?? false),
+        'detailsSubmitted' => (bool)($account['details_submitted'] ?? false),
+    ];
+}
+
+// Never returns the key itself: only its type and last 4 characters
+function admin_payment_settings(): array
+{
+    $secret = (string)app_config('stripe.secret_key', '');
+    $saved = stripe_settings_load();
+    $status = [
+        'connected' => $secret !== '',
+        'mode' => $secret === '' ? null : (str_contains($secret, '_live_') ? 'live' : 'test'),
+        'keyHint' => admin_stripe_key_hint($secret),
+        'managedHere' => $secret !== '' && ($saved['secret_key'] ?? '') === $secret,
+        'webhookReady' => (string)app_config('stripe.webhook_secret', '') !== '',
+        'webhookUrl' => absolute_url('api/stripe-webhook.php'),
+        'updatedAt' => $saved['updated_at'] ?? null,
+        'updatedBy' => $saved['updated_by'] ?? null,
+        'account' => null,
+        'error' => null,
+    ];
+    if ($secret !== '') {
+        try {
+            $status['account'] = admin_stripe_account_summary(store_stripe_request('GET', 'account'));
+        } catch (Throwable $e) {
+            $status['error'] = admin_stripe_error_message($e);
+        }
+    }
+    return $status;
+}
+
+function admin_save_payment_settings(array $payload, array $user): array
+{
+    $key = trim((string)($payload['secretKey'] ?? ''));
+    if (!preg_match('/^(sk|rk)_(test|live)_[A-Za-z0-9]{20,}$/', $key)) {
+        json_response(['ok' => false, 'error' => 'Cole a chave secreta da Stripe: ela começa com sk_test_ (teste) ou sk_live_ (real).'], 422);
+    }
+
+    try {
+        $account = store_stripe_request('GET', 'account', [], $key);
+    } catch (Throwable $e) {
+        json_response(['ok' => false, 'error' => admin_stripe_error_message($e)], 422);
+    }
+
+    // Stripe reveals a webhook signing secret only when the endpoint is created, so ours is recreated
+    $url = absolute_url('api/stripe-webhook.php');
+    try {
+        $endpoints = store_stripe_request('GET', 'webhook_endpoints', ['limit' => 100], $key);
+        foreach ($endpoints['data'] ?? [] as $endpoint) {
+            if (($endpoint['url'] ?? '') === $url) {
+                store_stripe_request('DELETE', 'webhook_endpoints/' . $endpoint['id'], [], $key);
+            }
+        }
+        $webhook = store_stripe_request('POST', 'webhook_endpoints', [
+            'url' => $url,
+            'enabled_events' => STRIPE_WEBHOOK_EVENTS,
+            'description' => 'Loja GAO Joias (criado pelo painel)',
+        ], $key);
+    } catch (Throwable $e) {
+        json_response(['ok' => false, 'error' => 'A chave é válida, mas não foi possível criar o webhook: ' . admin_stripe_error_message($e)], 422);
+    }
+
+    $saved = [
+        'secret_key' => $key,
+        'webhook_secret' => (string)($webhook['secret'] ?? ''),
+        'webhook_id' => (string)($webhook['id'] ?? ''),
+        'account_id' => (string)($account['id'] ?? ''),
+        'updated_at' => date('c'),
+        'updated_by' => (string)($user['name'] ?? ''),
+    ];
+    $path = stripe_settings_path();
+    if (file_put_contents($path, json_encode($saved, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), LOCK_EX) === false) {
+        json_response(['ok' => false, 'error' => 'Não foi possível gravar as chaves no servidor.'], 500);
+    }
+    @chmod($path, 0600);
+
+    global $config;
+    $config['stripe']['secret_key'] = $saved['secret_key'];
+    $config['stripe']['webhook_secret'] = $saved['webhook_secret'];
+    return admin_payment_settings();
+}
+
+function admin_disconnect_payment_settings(): array
+{
+    $saved = stripe_settings_load();
+    if (!empty($saved['secret_key']) && !empty($saved['webhook_id'])) {
+        try {
+            store_stripe_request('DELETE', 'webhook_endpoints/' . $saved['webhook_id'], [], (string)$saved['secret_key']);
+        } catch (Throwable) {
+            // already deleted in the Stripe dashboard
+        }
+    }
+    $path = stripe_settings_path();
+    if (is_file($path) && !unlink($path)) {
+        json_response(['ok' => false, 'error' => 'Não foi possível remover as chaves do servidor.'], 500);
+    }
+
+    global $config;
+    if (($config['stripe']['secret_key'] ?? '') === ($saved['secret_key'] ?? null)) {
+        $config['stripe']['secret_key'] = '';
+        $config['stripe']['webhook_secret'] = '';
+    }
+    return admin_payment_settings();
+}
+
 function admin_handle_action(string $action, array $payload, array $user): mixed
 {
     $adminOnlyActions = [
@@ -1775,6 +1919,9 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'updateLembrete',
         'adjustInventory',
         'bulkAdjustInventory',
+        'getPaymentSettings',
+        'savePaymentSettings',
+        'disconnectPaymentSettings',
     ];
     if (in_array($action, $adminOnlyActions, true)) {
         admin_require_admin_action($user);
@@ -1800,6 +1947,9 @@ function admin_handle_action(string $action, array $payload, array $user): mixed
         'adjustInventory' => admin_adjust_inventory($payload, $user),
         'bulkAdjustInventory' => admin_bulk_adjust_inventory($payload, $user),
         'updateOrder' => admin_update_order($payload),
+        'getPaymentSettings' => admin_payment_settings(),
+        'savePaymentSettings' => admin_save_payment_settings($payload, $user),
+        'disconnectPaymentSettings' => admin_disconnect_payment_settings(),
         'listMarketing'    => mkt_list_all(),
         'upsertCampaign'   => mkt_upsert_campaign($payload),
         'deleteCampaign'   => mkt_delete_campaign($payload),

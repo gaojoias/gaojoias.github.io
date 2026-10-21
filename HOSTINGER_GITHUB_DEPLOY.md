@@ -15,8 +15,8 @@ Referencia oficial da Hostinger: https://www.hostinger.com/support/1583302-how-t
 1. No hPanel, crie o site/domino da GAO Joias.
 2. Crie um banco MySQL.
 3. Importe `database/schema.sql` pelo phpMyAdmin.
-4. Em `public_html`, crie um arquivo `.env` usando `HOSTINGER_PRODUCTION.env.template` como base.
-5. Ajuste `APP_BASE_URL`, `DB_*`, `STRIPE_*` e mantenha `COOKIE_SECURE=true`.
+4. Crie `gaoapp_config.php` na pasta **acima** de `public_html` (com base em `config/config.example.php`): o deploy do Git apaga de `public_html` tudo que nao esta no repositorio, inclusive `.env` e `config/config.php`.
+5. Ajuste `app.base_url`, o banco de dados e mantenha `cookie_secure` ligado.
 
 ## 3. Conectar GitHub na Hostinger
 
@@ -35,7 +35,11 @@ Referencia oficial da Hostinger: https://www.hostinger.com/support/1583302-how-t
 
 ## 5. Stripe em producao
 
-Configure o webhook da Stripe para:
+Conecte pelo painel: **Configuracoes → Pagamentos**. Cole a chave secreta (`sk_test_...` para testar, `sk_live_...` para vender):
+o painel confere a conta na Stripe, cria o webhook abaixo automaticamente e guarda as chaves em `gaoapp_stripe.json`,
+fora de `public_html` (nao some nos deploys e nunca vai para o GitHub).
+
+O webhook criado aponta para:
 
 ```text
 https://www.seu-dominio.com.br/api/stripe-webhook.php

@@ -763,6 +763,34 @@
             </div>
           </div>
 
+          <!-- Pagamentos -->
+          <div class="cfg-group">
+            <p class="cfg-group-label"><i class="fa-solid fa-credit-card"></i> Pagamentos</p>
+            <div class="cfg-card pay-card" id="stripe-card">
+              <div class="cfg-card-head">
+                <div class="cfg-icon cfg-icon--stripe"><i class="fa-brands fa-stripe-s"></i></div>
+                <div class="cfg-card-info">
+                  <strong>Stripe · pagamentos da loja online</strong>
+                  <span>Recebe os pagamentos do checkout da loja e confirma os pedidos automaticamente</span>
+                </div>
+                <span class="badge neutral" id="stripe-badge">Verificando…</span>
+              </div>
+              <div class="pay-status" id="stripe-status" aria-live="polite"></div>
+              <form class="pay-form" id="stripe-form" autocomplete="off">
+                <label class="cfg-field-label">
+                  <span id="stripe-key-label">Chave secreta da Stripe</span>
+                  <input type="password" name="secretKey" class="input" placeholder="sk_test_… ou sk_live_…" autocomplete="off" spellcheck="false" required />
+                </label>
+                <div class="cfg-actions">
+                  <button type="submit" class="btn btn-primary" id="stripe-submit"><i class="fa-solid fa-plug"></i> <span>Conectar Stripe</span></button>
+                  <button type="button" class="btn btn-ghost" id="stripe-disconnect" hidden><i class="fa-solid fa-link-slash"></i> Desconectar</button>
+                  <a class="btn btn-ghost" href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-key"></i> Abrir chaves na Stripe</a>
+                </div>
+                <p class="pay-note"><i class="fa-solid fa-lock"></i> A chave fica guardada só no servidor e nunca é exibida completa.</p>
+              </form>
+            </div>
+          </div>
+
           <!-- Impressao -->
           <div class="cfg-group">
             <p class="cfg-group-label"><i class="fa-solid fa-print"></i> Impressao</p>

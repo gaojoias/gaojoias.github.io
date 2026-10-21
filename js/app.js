@@ -1446,6 +1446,9 @@ function switchView(viewId) {
   if (viewId === 'marketing' && !state.marketing.loaded) {
     loadMarketing();
   }
+  if (viewId === 'config') {
+    loadPaymentSettings();
+  }
 }
 
 function updateProfile() {
@@ -5764,7 +5767,107 @@ function handleExport(type) {
   URL.revokeObjectURL(url);
 }
 
+// ── Pagamentos (Stripe): the API only ever returns a key hint, never the key ──
+let paymentStatus = null;
+
+function paymentCheck(ok, label, hint) {
+  return `<li class="pay-check ${ok ? 'ok' : 'no'}"><i class="fa-solid ${ok ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i>`
+    + `<span>${label}${!ok && hint ? `<small>${hint}</small>` : ''}</span></li>`;
+}
+
+function stripeSubmitHtml() {
+  return `<i class="fa-solid fa-plug"></i> <span>${paymentStatus?.connected ? 'Trocar chave' : 'Conectar Stripe'}</span>`;
+}
+
+function renderPaymentSettings(status) {
+  const badge = document.getElementById('stripe-badge');
+  const box = document.getElementById('stripe-status');
+  if (!badge || !box) return;
+  paymentStatus = status;
+
+  if (!status.connected) {
+    badge.className = 'badge warn';
+    badge.textContent = 'Não conectada';
+    box.innerHTML = `
+      <p class="pay-lead">A loja ainda não aceita pagamentos online. Para conectar:</p>
+      <ol class="pay-steps">
+        <li>No painel da Stripe, abra <b>Desenvolvedores → Chaves de API</b>.</li>
+        <li>Copie a <b>Chave secreta</b>. Comece pela de teste (<code>sk_test_…</code>) para fazer uma compra de teste.</li>
+        <li>Cole abaixo e clique em <b>Conectar Stripe</b>. A confirmação automática dos pedidos (webhook) é criada na hora.</li>
+      </ol>`;
+  } else {
+    const account = status.account;
+    const live = status.mode === 'live';
+    badge.className = `badge ${status.error ? 'danger' : live ? 'success' : 'warn'}`;
+    badge.textContent = status.error ? 'Com erro' : live ? 'Conectada · Real' : 'Conectada · Teste';
+    const connectedAt = status.updatedAt ? ` · conectada em ${formatDate(status.updatedAt)}${status.updatedBy ? ` por ${status.updatedBy}` : ''}` : '';
+    box.innerHTML = `
+      ${status.error ? `<p class="pay-error"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(status.error)}</p>` : ''}
+      ${account ? `
+        <div class="pay-account">
+          <strong>${escapeHtml(account.name || account.email || 'Conta Stripe')}</strong>
+          <span>${escapeHtml([account.id, account.email, account.country].filter(Boolean).join(' · '))}</span>
+        </div>
+        <ul class="pay-checks">
+          ${paymentCheck(account.chargesEnabled, 'Pode receber pagamentos', 'Conclua a ativação da conta na Stripe (dados da empresa e conta bancária).')}
+          ${paymentCheck(account.payoutsEnabled, 'Repasses para a conta bancária', 'Cadastre a conta bancária na Stripe.')}
+          ${paymentCheck(status.webhookReady, 'Confirmação automática dos pedidos (webhook)', 'Cole a mesma chave em “Trocar chave” para recriar o webhook.')}
+        </ul>` : ''}
+      ${account && !live ? `<p class="pay-tip"><i class="fa-solid fa-flask"></i> Modo teste: faça uma compra na loja com o cartão <b>4242 4242 4242 4242</b>, qualquer data futura e qualquer CVC. Nada é cobrado. Quando estiver tudo certo, troque pela chave real (<code>sk_live_…</code>).</p>` : ''}
+      <p class="pay-meta">Chave ${escapeHtml(status.keyHint)}${escapeHtml(connectedAt)}${status.managedHere ? '' : ' · definida no servidor'}</p>`;
+  }
+
+  document.getElementById('stripe-key-label').textContent = status.connected ? 'Trocar chave secreta' : 'Chave secreta da Stripe';
+  document.getElementById('stripe-submit').innerHTML = stripeSubmitHtml();
+  document.getElementById('stripe-disconnect').hidden = !status.managedHere;
+}
+
+async function loadPaymentSettings() {
+  const badge = document.getElementById('stripe-badge');
+  if (!badge) return;
+  badge.className = 'badge neutral';
+  badge.textContent = 'Verificando…';
+  try {
+    renderPaymentSettings(await apiRequest('getPaymentSettings'));
+  } catch (error) {
+    badge.className = 'badge danger';
+    badge.textContent = 'Erro';
+    document.getElementById('stripe-status').innerHTML = `<p class="pay-error">${escapeHtml(error.message || 'Não foi possível consultar a Stripe.')}</p>`;
+  }
+}
+
+async function handleStripeSubmit(event) {
+  event.preventDefault();
+  const input = event.target.querySelector('[name="secretKey"]');
+  const submit = document.getElementById('stripe-submit');
+  submit.disabled = true;
+  submit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Verificando na Stripe…</span>';
+  try {
+    const status = await apiRequest('savePaymentSettings', { secretKey: input.value.trim() });
+    input.value = '';
+    renderPaymentSettings(status);
+    showToast(`Stripe conectada${status.account?.name ? `: ${status.account.name}` : ''}.`);
+  } catch (error) {
+    showToast(error.message || 'Não foi possível conectar a Stripe.', 'error');
+  } finally {
+    submit.disabled = false;
+    submit.innerHTML = stripeSubmitHtml();
+  }
+}
+
+async function handleStripeDisconnect() {
+  if (!confirm('Desconectar a Stripe? A loja deixa de aceitar pagamentos online até você conectar de novo.')) return;
+  try {
+    renderPaymentSettings(await apiRequest('disconnectPaymentSettings'));
+    showToast('Stripe desconectada.');
+  } catch (error) {
+    showToast(error.message || 'Não foi possível desconectar a Stripe.', 'error');
+  }
+}
+
 function setupEvents() {
+  document.getElementById('stripe-form')?.addEventListener('submit', handleStripeSubmit);
+  document.getElementById('stripe-disconnect')?.addEventListener('click', handleStripeDisconnect);
   dom.loginForm.addEventListener('submit', handleLogin);
   dom.profileSelectButtons.forEach((button) => {
     button.addEventListener('click', () => {

@@ -989,6 +989,48 @@ input::placeholder { color: var(--muted); opacity: 0.7; }
 
 .cfg-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* ── Payments (Stripe) ── */
+.pay-card { max-width: 780px; }
+.pay-card .cfg-card-head > .badge { flex-shrink: 0; align-self: center; }
+.cfg-icon--stripe { background: rgba(99,91,255,0.12); border-color: rgba(99,91,255,0.28); color: #8f89ff; font-size: 17px; }
+[data-theme='light'] .cfg-icon--stripe { color: #635bff; }
+.pay-status { display: flex; flex-direction: column; gap: 12px; font-size: 13px; line-height: 1.5; }
+.pay-status:empty { display: none; }
+.pay-lead { margin: 0; font-weight: 600; color: var(--text); }
+.pay-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); }
+.pay-steps b { color: var(--text); }
+.pay-status code, .pay-tip code {
+  padding: 1px 6px; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--surface);
+  font-family: monospace; font-size: 12px;
+}
+.pay-account {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 12px 14px; border-radius: var(--r-sm);
+  border: 1px solid var(--border); background: var(--surface);
+}
+.pay-account strong { font-size: 15px; }
+.pay-account span { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.pay-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pay-check { display: flex; align-items: flex-start; gap: 9px; }
+.pay-check i { margin-top: 3px; }
+.pay-check.ok i { color: var(--green); }
+.pay-check.no i { color: var(--gold); }
+.pay-check small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--muted); }
+.pay-tip {
+  margin: 0; padding: 10px 12px; border-radius: var(--r-sm);
+  border: 1px solid var(--border-gold); background: var(--gold-dim);
+  color: var(--text);
+}
+.pay-tip i { margin-right: 4px; color: var(--gold); }
+.pay-error { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--red-dim); color: var(--red); font-weight: 600; }
+.pay-meta { margin: 0; font-size: 11.5px; color: var(--muted); }
+.pay-card [hidden] { display: none !important; }
+.pay-form { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pay-form a.btn { text-decoration: none; }
+.pay-form .input { font-family: monospace; letter-spacing: 0.02em; }
+.pay-note { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 11.5px; color: var(--muted); }
+
 /* thermal status inline (overrides old box style) */
 #thermal-status {
   display: block; font-size: 12px; line-height: 1.4;

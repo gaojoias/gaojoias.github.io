@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 require __DIR__ . '/../app/admin_api.php';
+require __DIR__ . '/../app/store_lib.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['ok' => false, 'error' => 'Metodo nao permitido.'], 405);
